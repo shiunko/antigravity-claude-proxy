@@ -12,82 +12,9 @@
  * - Tool use/result flow works correctly
  * - Interleaved thinking with tools
  */
-const http = require('http');
+const { makeRequest, analyzeContent, commonTools } = require('./helpers/http-client.cjs');
 
-const BASE_URL = 'localhost';
-const PORT = 8080;
-
-function makeRequest(body) {
-    return new Promise((resolve, reject) => {
-        const data = JSON.stringify(body);
-        const req = http.request({
-            host: BASE_URL,
-            port: PORT,
-            path: '/v1/messages',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': 'test',
-                'anthropic-version': '2023-06-01',
-                'anthropic-beta': 'interleaved-thinking-2025-05-14',
-                'Content-Length': Buffer.byteLength(data)
-            }
-        }, res => {
-            let fullData = '';
-            res.on('data', chunk => fullData += chunk.toString());
-            res.on('end', () => {
-                try {
-                    const parsed = JSON.parse(fullData);
-                    resolve({ ...parsed, statusCode: res.statusCode });
-                } catch (e) {
-                    reject(new Error(`Parse error: ${e.message}\nRaw: ${fullData.substring(0, 500)}`));
-                }
-            });
-        });
-        req.on('error', reject);
-        req.write(data);
-        req.end();
-    });
-}
-
-const tools = [{
-    name: 'search_files',
-    description: 'Search for files matching a pattern',
-    input_schema: {
-        type: 'object',
-        properties: {
-            pattern: { type: 'string', description: 'Glob pattern to search' },
-            path: { type: 'string', description: 'Directory to search in' }
-        },
-        required: ['pattern']
-    }
-}, {
-    name: 'read_file',
-    description: 'Read contents of a file',
-    input_schema: {
-        type: 'object',
-        properties: {
-            path: { type: 'string', description: 'Path to file' }
-        },
-        required: ['path']
-    }
-}];
-
-function analyzeContent(content) {
-    const thinking = content.filter(b => b.type === 'thinking');
-    const toolUse = content.filter(b => b.type === 'tool_use');
-    const text = content.filter(b => b.type === 'text');
-
-    return {
-        thinking,
-        toolUse,
-        text,
-        hasThinking: thinking.length > 0,
-        hasToolUse: toolUse.length > 0,
-        hasText: text.length > 0,
-        thinkingHasSignature: thinking.some(t => t.signature && t.signature.length >= 50)
-    };
-}
+const tools = [commonTools.searchFiles, commonTools.readFile];
 
 async function runTests() {
     console.log('='.repeat(60));

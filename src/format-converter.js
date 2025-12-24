@@ -17,6 +17,8 @@ import {
 
 /**
  * Map Anthropic model name to Antigravity model name
+ * @param {string} anthropicModel - Anthropic format model name (e.g., 'claude-3-5-sonnet-20241022')
+ * @returns {string} Antigravity format model name (e.g., 'claude-sonnet-4-5')
  */
 export function mapModelName(anthropicModel) {
     return MODEL_MAPPINGS[anthropicModel] || anthropicModel;
@@ -24,6 +26,8 @@ export function mapModelName(anthropicModel) {
 
 /**
  * Check if a part is a thinking block
+ * @param {Object} part - Content part to check
+ * @returns {boolean} True if the part is a thinking block
  */
 function isThinkingPart(part) {
     return part.type === 'thinking' ||
@@ -96,6 +100,9 @@ function filterContentArray(contentArray) {
 
 /**
  * Filter unsigned thinking blocks from contents (Gemini format)
+ *
+ * @param {Array<{role: string, parts: Array}>} contents - Array of content objects in Gemini format
+ * @returns {Array<{role: string, parts: Array}>} Filtered contents with unsigned thinking blocks removed
  */
 export function filterUnsignedThinkingBlocks(contents) {
     return contents.map(content => {
@@ -113,6 +120,9 @@ export function filterUnsignedThinkingBlocks(contents) {
  * Remove trailing unsigned thinking blocks from assistant messages.
  * Claude/Gemini APIs require that assistant messages don't end with unsigned thinking blocks.
  * This function removes thinking blocks from the end of content arrays.
+ *
+ * @param {Array<Object>} content - Array of content blocks
+ * @returns {Array<Object>} Content array with trailing unsigned thinking blocks removed
  */
 export function removeTrailingThinkingBlocks(content) {
     if (!Array.isArray(content)) return content;
@@ -174,6 +184,9 @@ function sanitizeAnthropicThinkingBlock(block) {
  * Filter thinking blocks: keep only those with valid signatures.
  * Blocks without signatures are dropped (API requires signatures).
  * Also sanitizes blocks to remove extra fields like cache_control.
+ *
+ * @param {Array<Object>} content - Array of content blocks
+ * @returns {Array<Object>} Filtered content with only valid signed thinking blocks
  */
 export function restoreThinkingSignatures(content) {
     if (!Array.isArray(content)) return content;
@@ -208,6 +221,9 @@ export function restoreThinkingSignatures(content) {
  * 3. Tool_use blocks come at the end (required before tool_result)
  *
  * Claude API requires that when thinking is enabled, assistant messages must start with thinking.
+ *
+ * @param {Array<Object>} content - Array of content blocks
+ * @returns {Array<Object>} Reordered content array
  */
 export function reorderAssistantContent(content) {
     if (!Array.isArray(content)) return content;

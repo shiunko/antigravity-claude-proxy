@@ -19,7 +19,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { exec } from 'child_process';
 import net from 'net';
-import { ACCOUNT_CONFIG_PATH, DEFAULT_PORT } from './constants.js';
+import { ACCOUNT_CONFIG_PATH, DEFAULT_PORT, MAX_ACCOUNTS } from './constants.js';
 import {
     getAuthorizationUrl,
     startCallbackServer,
@@ -28,7 +28,6 @@ import {
     getUserEmail
 } from './oauth.js';
 
-const MAX_ACCOUNTS = 10;
 const SERVER_PORT = process.env.PORT || DEFAULT_PORT;
 
 /**

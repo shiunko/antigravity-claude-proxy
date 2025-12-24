@@ -23,27 +23,23 @@ import {
     convertAnthropicToGoogle,
     convertGoogleToAnthropic
 } from './format-converter.js';
-import { formatDuration, sleep } from './account-manager.js';
+import { formatDuration, sleep } from './utils/helpers.js';
+import { isRateLimitError, isAuthError } from './errors.js';
 
 /**
  * Check if an error is a rate limit error (429 or RESOURCE_EXHAUSTED)
+ * @deprecated Use isRateLimitError from errors.js instead
  */
 function is429Error(error) {
-    const msg = (error.message || '').toLowerCase();
-    return msg.includes('429') ||
-        msg.includes('resource_exhausted') ||
-        msg.includes('quota_exhausted') ||
-        msg.includes('rate limit');
+    return isRateLimitError(error);
 }
 
 /**
  * Check if an error is an auth-invalid error (credentials need re-authentication)
+ * @deprecated Use isAuthError from errors.js instead
  */
 function isAuthInvalidError(error) {
-    const msg = (error.message || '').toUpperCase();
-    return msg.includes('AUTH_INVALID') ||
-        msg.includes('INVALID_GRANT') ||
-        msg.includes('TOKEN REFRESH FAILED');
+    return isAuthError(error);
 }
 
 /**
@@ -230,7 +226,13 @@ function buildHeaders(token, model, accept = 'application/json') {
  * Uses SSE endpoint for thinking models (non-streaming doesn't return thinking blocks)
  *
  * @param {Object} anthropicRequest - The Anthropic-format request
- * @param {AccountManager} accountManager - The account manager instance
+ * @param {Object} anthropicRequest.model - Model name to use
+ * @param {Array} anthropicRequest.messages - Array of message objects
+ * @param {number} [anthropicRequest.max_tokens] - Maximum tokens to generate
+ * @param {Object} [anthropicRequest.thinking] - Thinking configuration
+ * @param {import('./account-manager.js').default} accountManager - The account manager instance
+ * @returns {Promise<Object>} Anthropic-format response object
+ * @throws {Error} If max retries exceeded or no accounts available
  */
 export async function sendMessage(anthropicRequest, accountManager) {
     const model = mapModelName(anthropicRequest.model);
@@ -479,7 +481,13 @@ async function parseThinkingSSEResponse(response, originalModel) {
  * Streams events in real-time as they arrive from the server
  *
  * @param {Object} anthropicRequest - The Anthropic-format request
- * @param {AccountManager} accountManager - The account manager instance
+ * @param {string} anthropicRequest.model - Model name to use
+ * @param {Array} anthropicRequest.messages - Array of message objects
+ * @param {number} [anthropicRequest.max_tokens] - Maximum tokens to generate
+ * @param {Object} [anthropicRequest.thinking] - Thinking configuration
+ * @param {import('./account-manager.js').default} accountManager - The account manager instance
+ * @yields {Object} Anthropic-format SSE events (message_start, content_block_start, content_block_delta, etc.)
+ * @throws {Error} If max retries exceeded or no accounts available
  */
 export async function* sendMessageStream(anthropicRequest, accountManager) {
     const model = mapModelName(anthropicRequest.model);
@@ -849,7 +857,9 @@ async function* streamSSEResponse(response, originalModel) {
 }
 
 /**
- * List available models
+ * List available models in Anthropic API format
+ *
+ * @returns {{object: string, data: Array<{id: string, object: string, created: number, owned_by: string, description: string}>}} List of available models
  */
 export function listModels() {
     return {

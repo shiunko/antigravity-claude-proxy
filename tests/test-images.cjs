@@ -4,96 +4,13 @@
  * Tests that images can be sent to the API with thinking models.
  * Simulates Claude Code sending screenshots or images for analysis.
  */
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
-
-const BASE_URL = 'localhost';
-const PORT = 8080;
+const { streamRequest } = require('./helpers/http-client.cjs');
 
 // Load test image from disk
 const TEST_IMAGE_PATH = path.join(__dirname, 'utils', 'test_image.jpeg');
 const TEST_IMAGE_BASE64 = fs.readFileSync(TEST_IMAGE_PATH).toString('base64');
-
-function streamRequest(body) {
-    return new Promise((resolve, reject) => {
-        const data = JSON.stringify(body);
-        const req = http.request({
-            host: BASE_URL,
-            port: PORT,
-            path: '/v1/messages',
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-api-key': 'test',
-                'anthropic-version': '2023-06-01',
-                'anthropic-beta': 'interleaved-thinking-2025-05-14',
-                'Content-Length': Buffer.byteLength(data)
-            }
-        }, res => {
-            const events = [];
-            let fullData = '';
-
-            res.on('data', chunk => {
-                fullData += chunk.toString();
-            });
-
-            res.on('end', () => {
-                const parts = fullData.split('\n\n').filter(e => e.trim());
-                for (const part of parts) {
-                    const lines = part.split('\n');
-                    const eventLine = lines.find(l => l.startsWith('event:'));
-                    const dataLine = lines.find(l => l.startsWith('data:'));
-                    if (eventLine && dataLine) {
-                        try {
-                            const eventType = eventLine.replace('event:', '').trim();
-                            const eventData = JSON.parse(dataLine.replace('data:', '').trim());
-                            events.push({ type: eventType, data: eventData });
-                        } catch (e) { }
-                    }
-                }
-
-                const content = [];
-                let currentBlock = null;
-
-                for (const event of events) {
-                    if (event.type === 'content_block_start') {
-                        currentBlock = { ...event.data.content_block };
-                        if (currentBlock.type === 'thinking') {
-                            currentBlock.thinking = '';
-                            currentBlock.signature = '';
-                        }
-                        if (currentBlock.type === 'text') currentBlock.text = '';
-                    } else if (event.type === 'content_block_delta') {
-                        const delta = event.data.delta;
-                        if (delta.type === 'thinking_delta' && currentBlock) {
-                            currentBlock.thinking += delta.thinking || '';
-                        }
-                        if (delta.type === 'signature_delta' && currentBlock) {
-                            currentBlock.signature += delta.signature || '';
-                        }
-                        if (delta.type === 'text_delta' && currentBlock) {
-                            currentBlock.text += delta.text || '';
-                        }
-                    } else if (event.type === 'content_block_stop') {
-                        if (currentBlock) content.push(currentBlock);
-                        currentBlock = null;
-                    }
-                }
-
-                const errorEvent = events.find(e => e.type === 'error');
-                if (errorEvent) {
-                    resolve({ content, events, error: errorEvent.data.error, statusCode: res.statusCode });
-                } else {
-                    resolve({ content, events, statusCode: res.statusCode });
-                }
-            });
-        });
-        req.on('error', reject);
-        req.write(data);
-        req.end();
-    });
-}
 
 async function runTests() {
     console.log('='.repeat(60));

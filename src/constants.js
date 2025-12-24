@@ -78,8 +78,16 @@ export const ACCOUNT_CONFIG_PATH = join(
     homedir(),
     '.config/antigravity-proxy/accounts.json'
 );
+
+// Antigravity app database path (for legacy single-account token extraction)
+export const ANTIGRAVITY_DB_PATH = join(
+    homedir(),
+    'Library/Application Support/Antigravity/User/globalStorage/state.vscdb'
+);
+
 export const DEFAULT_COOLDOWN_MS = 60 * 1000; // 1 minute default cooldown
 export const MAX_RETRIES = 5; // Max retry attempts across accounts
+export const MAX_ACCOUNTS = 10; // Maximum number of accounts allowed
 
 // Rate limit wait thresholds
 export const MAX_WAIT_BEFORE_ERROR_MS = 120000; // 2 minutes - throw error if wait exceeds this
@@ -88,6 +96,24 @@ export const MAX_WAIT_BEFORE_ERROR_MS = 120000; // 2 minutes - throw error if wa
 export const DEFAULT_THINKING_BUDGET = 16000; // Default thinking budget tokens
 export const CLAUDE_THINKING_MAX_OUTPUT_TOKENS = 64000; // Max output tokens for thinking models
 export const MIN_SIGNATURE_LENGTH = 50; // Minimum valid thinking signature length
+
+// Google OAuth configuration (from opencode-antigravity-auth)
+export const OAUTH_CONFIG = {
+    clientId: '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com',
+    clientSecret: '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',
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    userInfoUrl: 'https://www.googleapis.com/oauth2/v1/userinfo',
+    callbackPort: 51121,
+    scopes: [
+        'https://www.googleapis.com/auth/cloud-platform',
+        'https://www.googleapis.com/auth/userinfo.email',
+        'https://www.googleapis.com/auth/userinfo.profile',
+        'https://www.googleapis.com/auth/cclog',
+        'https://www.googleapis.com/auth/experimentsandconfigs'
+    ]
+};
+export const OAUTH_REDIRECT_URI = `http://localhost:${OAUTH_CONFIG.callbackPort}/oauth-callback`;
 
 export default {
     ANTIGRAVITY_ENDPOINT_FALLBACKS,
@@ -100,10 +126,14 @@ export default {
     ANTIGRAVITY_AUTH_PORT,
     DEFAULT_PORT,
     ACCOUNT_CONFIG_PATH,
+    ANTIGRAVITY_DB_PATH,
     DEFAULT_COOLDOWN_MS,
     MAX_RETRIES,
+    MAX_ACCOUNTS,
     MAX_WAIT_BEFORE_ERROR_MS,
     DEFAULT_THINKING_BUDGET,
     CLAUDE_THINKING_MAX_OUTPUT_TOKENS,
-    MIN_SIGNATURE_LENGTH
+    MIN_SIGNATURE_LENGTH,
+    OAUTH_CONFIG,
+    OAUTH_REDIRECT_URI
 };

@@ -18,7 +18,7 @@ npm install
 npm start
 
 # Start with file watching for development
-npm dev
+npm run dev
 
 # Account management
 npm run accounts         # Interactive account management
@@ -46,13 +46,15 @@ Claude Code CLI → Express Server (server.js) → CloudCode Client → Antigrav
 
 **Key Modules:**
 
-- **server.js**: Express server exposing Anthropic-compatible endpoints (`/v1/messages`, `/v1/models`, `/health`, `/accounts`)
-- **cloudcode-client.js**: Makes requests to Antigravity Cloud Code API with retry/failover logic, handles both streaming and non-streaming
-- **format-converter.js**: Bidirectional conversion between Anthropic and Google Generative AI formats, including thinking blocks and tool calls
-- **account-manager.js**: Multi-account pool with round-robin rotation, rate limit handling, and automatic cooldown
-- **oauth.js**: Google OAuth implementation for adding accounts
-- **token-extractor.js**: Extracts tokens from local Antigravity app installation (legacy single-account mode)
-- **constants.js**: API endpoints, model mappings, configuration values
+- **src/server.js**: Express server exposing Anthropic-compatible endpoints (`/v1/messages`, `/v1/models`, `/health`, `/accounts`)
+- **src/cloudcode-client.js**: Makes requests to Antigravity Cloud Code API with retry/failover logic, handles both streaming and non-streaming
+- **src/format-converter.js**: Bidirectional conversion between Anthropic and Google Generative AI formats, including thinking blocks and tool calls
+- **src/account-manager.js**: Multi-account pool with round-robin rotation, rate limit handling, and automatic cooldown
+- **src/oauth.js**: Google OAuth implementation for adding accounts
+- **src/token-extractor.js**: Extracts tokens from local Antigravity app installation (legacy single-account mode)
+- **src/constants.js**: API endpoints, model mappings, OAuth config, and all configuration values
+- **src/errors.js**: Custom error classes (`RateLimitError`, `AuthError`, `ApiError`, etc.) for structured error handling
+- **src/utils/helpers.js**: Shared utility functions (`formatDuration`, `sleep`)
 
 **Multi-Account Load Balancing:**
 - Round-robin rotation across configured accounts
@@ -64,4 +66,28 @@ Claude Code CLI → Express Server (server.js) → CloudCode Client → Antigrav
 
 - Tests require the server to be running (`npm start` in separate terminal)
 - Tests are CommonJS files (`.cjs`) that make HTTP requests to the local proxy
+- Shared test utilities are in `tests/helpers/http-client.cjs`
 - Test runner supports filtering: `node tests/run-all.cjs <filter>` to run matching tests
+
+## Code Organization
+
+**Constants:** All configuration values are centralized in `src/constants.js`:
+- API endpoints and headers
+- Model mappings
+- OAuth configuration
+- Rate limit thresholds
+- Thinking model settings
+
+**Error Handling:** Use custom error classes from `src/errors.js`:
+- `RateLimitError` - 429/RESOURCE_EXHAUSTED errors
+- `AuthError` - Authentication failures
+- `ApiError` - Upstream API errors
+- Helper functions: `isRateLimitError()`, `isAuthError()`
+
+**Utilities:** Shared helpers in `src/utils/helpers.js`:
+- `formatDuration(ms)` - Format milliseconds as "1h23m45s"
+- `sleep(ms)` - Promise-based delay
+
+## Maintenance
+
+When making significant changes to the codebase (new modules, refactoring, architectural changes), update this CLAUDE.md file to keep documentation in sync.

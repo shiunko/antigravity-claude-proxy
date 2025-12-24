@@ -1,25 +1,21 @@
 /**
  * Token Extractor Module
  * Extracts OAuth tokens from Antigravity's SQLite database
- * 
+ *
  * The database is automatically updated by Antigravity when tokens refresh,
  * so this approach doesn't require any manual intervention.
  */
 
 import { execSync } from 'child_process';
-import { homedir } from 'os';
-import { join } from 'path';
-import { TOKEN_REFRESH_INTERVAL_MS, ANTIGRAVITY_AUTH_PORT } from './constants.js';
+import {
+    TOKEN_REFRESH_INTERVAL_MS,
+    ANTIGRAVITY_AUTH_PORT,
+    ANTIGRAVITY_DB_PATH
+} from './constants.js';
 
 // Cache for the extracted token
 let cachedToken = null;
 let tokenExtractedAt = null;
-
-// Antigravity's SQLite database path
-const ANTIGRAVITY_DB_PATH = join(
-    homedir(),
-    'Library/Application Support/Antigravity/User/globalStorage/state.vscdb'
-);
 
 /**
  * Extract token from Antigravity's SQLite database

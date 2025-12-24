@@ -8,10 +8,9 @@ import { readFile, writeFile, mkdir, access } from 'fs/promises';
 import { constants as fsConstants } from 'fs';
 import { dirname } from 'path';
 import { execSync } from 'child_process';
-import { homedir } from 'os';
-import { join } from 'path';
 import {
     ACCOUNT_CONFIG_PATH,
+    ANTIGRAVITY_DB_PATH,
     DEFAULT_COOLDOWN_MS,
     TOKEN_REFRESH_INTERVAL_MS,
     ANTIGRAVITY_ENDPOINT_FALLBACKS,
@@ -19,36 +18,7 @@ import {
     DEFAULT_PROJECT_ID
 } from './constants.js';
 import { refreshAccessToken } from './oauth.js';
-
-// Default Antigravity database path
-const ANTIGRAVITY_DB_PATH = join(
-    homedir(),
-    'Library/Application Support/Antigravity/User/globalStorage/state.vscdb'
-);
-
-/**
- * Format duration in milliseconds to human-readable string (e.g., "1h23m45s")
- */
-function formatDuration(ms) {
-    const seconds = Math.floor(ms / 1000);
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hours > 0) {
-        return `${hours}h${minutes}m${secs}s`;
-    } else if (minutes > 0) {
-        return `${minutes}m${secs}s`;
-    }
-    return `${secs}s`;
-}
-
-/**
- * Sleep for specified milliseconds
- */
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+import { formatDuration } from './utils/helpers.js';
 
 export class AccountManager {
     #accounts = [];
@@ -156,6 +126,7 @@ export class AccountManager {
 
     /**
      * Get the number of accounts
+     * @returns {number} Number of configured accounts
      */
     getAccountCount() {
         return this.#accounts.length;
@@ -163,6 +134,7 @@ export class AccountManager {
 
     /**
      * Check if all accounts are rate-limited
+     * @returns {boolean} True if all accounts are rate-limited
      */
     isAllRateLimited() {
         if (this.#accounts.length === 0) return true;
@@ -171,6 +143,7 @@ export class AccountManager {
 
     /**
      * Get list of available (non-rate-limited, non-invalid) accounts
+     * @returns {Array<Object>} Array of available account objects
      */
     getAvailableAccounts() {
         return this.#accounts.filter(acc => !acc.isRateLimited && !acc.isInvalid);
@@ -178,6 +151,7 @@ export class AccountManager {
 
     /**
      * Get list of invalid accounts
+     * @returns {Array<Object>} Array of invalid account objects
      */
     getInvalidAccounts() {
         return this.#accounts.filter(acc => acc.isInvalid);
@@ -185,6 +159,7 @@ export class AccountManager {
 
     /**
      * Clear expired rate limits
+     * @returns {number} Number of rate limits cleared
      */
     clearExpiredLimits() {
         const now = Date.now();
@@ -209,6 +184,7 @@ export class AccountManager {
     /**
      * Clear all rate limits to force a fresh check
      * (Optimistic retry strategy)
+     * @returns {void}
      */
     resetAllRateLimits() {
         for (const account of this.#accounts) {
@@ -223,6 +199,7 @@ export class AccountManager {
 
     /**
      * Pick the next available account (round-robin)
+     * @returns {Object|null} The next available account or null if none available
      */
     pickNext() {
         this.clearExpiredLimits();
@@ -254,6 +231,8 @@ export class AccountManager {
 
     /**
      * Mark an account as rate-limited
+     * @param {string} email - Email of the account to mark
+     * @param {number|null} resetMs - Time in ms until rate limit resets (optional)
      */
     markRateLimited(email, resetMs = null) {
         const account = this.#accounts.find(a => a.email === email);
@@ -272,6 +251,8 @@ export class AccountManager {
 
     /**
      * Mark an account as invalid (credentials need re-authentication)
+     * @param {string} email - Email of the account to mark
+     * @param {string} reason - Reason for marking as invalid
      */
     markInvalid(email, reason = 'Unknown error') {
         const account = this.#accounts.find(a => a.email === email);
@@ -296,6 +277,7 @@ export class AccountManager {
 
     /**
      * Get the minimum wait time until any account becomes available
+     * @returns {number} Wait time in milliseconds
      */
     getMinWaitTimeMs() {
         if (!this.isAllRateLimited()) return 0;
@@ -323,6 +305,9 @@ export class AccountManager {
 
     /**
      * Get OAuth token for an account
+     * @param {Object} account - Account object with email and credentials
+     * @returns {Promise<string>} OAuth access token
+     * @throws {Error} If token refresh fails
      */
     async getTokenForAccount(account) {
         // Check cache first
@@ -372,6 +357,9 @@ export class AccountManager {
 
     /**
      * Get project ID for an account
+     * @param {Object} account - Account object
+     * @param {string} token - OAuth access token
+     * @returns {Promise<string>} Project ID
      */
     async getProjectForAccount(account, token) {
         // Check cache first
@@ -435,6 +423,7 @@ export class AccountManager {
 
     /**
      * Clear project cache for an account (useful on auth errors)
+     * @param {string|null} email - Email to clear cache for, or null to clear all
      */
     clearProjectCache(email = null) {
         if (email) {
@@ -446,6 +435,7 @@ export class AccountManager {
 
     /**
      * Clear token cache for an account (useful on auth errors)
+     * @param {string|null} email - Email to clear cache for, or null to clear all
      */
     clearTokenCache(email = null) {
         if (email) {
@@ -457,6 +447,7 @@ export class AccountManager {
 
     /**
      * Save current state to disk (async)
+     * @returns {Promise<void>}
      */
     async saveToDisk() {
         try {
@@ -491,6 +482,7 @@ export class AccountManager {
 
     /**
      * Get status object for logging/API
+     * @returns {{accounts: Array, settings: Object}} Status object with accounts and settings
      */
     getStatus() {
         const available = this.getAvailableAccounts();
@@ -517,13 +509,11 @@ export class AccountManager {
 
     /**
      * Get settings
+     * @returns {Object} Current settings object
      */
     getSettings() {
         return { ...this.#settings };
     }
 }
-
-// Export helper functions
-export { formatDuration, sleep };
 
 export default AccountManager;

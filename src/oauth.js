@@ -8,27 +8,11 @@
 
 import crypto from 'crypto';
 import http from 'http';
-import { ANTIGRAVITY_ENDPOINT_FALLBACKS, ANTIGRAVITY_HEADERS } from './constants.js';
-
-// Google OAuth configuration (from opencode-antigravity-auth)
-const GOOGLE_CLIENT_ID = '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
-const GOOGLE_CLIENT_SECRET = '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';
-const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v1/userinfo';
-
-// Local callback server configuration
-const CALLBACK_PORT = 51121;
-const REDIRECT_URI = `http://localhost:${CALLBACK_PORT}/oauth-callback`;
-
-// Scopes needed for Cloud Code access (matching Antigravity)
-const SCOPES = [
-    'https://www.googleapis.com/auth/cloud-platform',
-    'https://www.googleapis.com/auth/userinfo.email',
-    'https://www.googleapis.com/auth/userinfo.profile',
-    'https://www.googleapis.com/auth/cclog',
-    'https://www.googleapis.com/auth/experimentsandconfigs'
-].join(' ');
+import {
+    ANTIGRAVITY_ENDPOINT_FALLBACKS,
+    ANTIGRAVITY_HEADERS,
+    OAUTH_CONFIG
+} from './constants.js';
 
 /**
  * Generate PKCE code verifier and challenge
@@ -45,16 +29,18 @@ function generatePKCE() {
 /**
  * Generate authorization URL for Google OAuth
  * Returns the URL and the PKCE verifier (needed for token exchange)
+ *
+ * @returns {{url: string, verifier: string, state: string}} Auth URL and PKCE data
  */
 export function getAuthorizationUrl() {
     const { verifier, challenge } = generatePKCE();
     const state = crypto.randomBytes(16).toString('hex');
 
     const params = new URLSearchParams({
-        client_id: GOOGLE_CLIENT_ID,
-        redirect_uri: REDIRECT_URI,
+        client_id: OAUTH_CONFIG.clientId,
+        redirect_uri: OAUTH_REDIRECT_URI,
         response_type: 'code',
-        scope: SCOPES,
+        scope: OAUTH_CONFIG.scopes.join(' '),
         access_type: 'offline',
         prompt: 'consent',
         code_challenge: challenge,
@@ -63,7 +49,7 @@ export function getAuthorizationUrl() {
     });
 
     return {
-        url: `${GOOGLE_AUTH_URL}?${params.toString()}`,
+        url: `${OAUTH_CONFIG.authUrl}?${params.toString()}`,
         verifier,
         state
     };
@@ -72,11 +58,15 @@ export function getAuthorizationUrl() {
 /**
  * Start a local server to receive the OAuth callback
  * Returns a promise that resolves with the authorization code
+ *
+ * @param {string} expectedState - Expected state parameter for CSRF protection
+ * @param {number} timeoutMs - Timeout in milliseconds (default 120000)
+ * @returns {Promise<string>} Authorization code from OAuth callback
  */
 export function startCallbackServer(expectedState, timeoutMs = 120000) {
     return new Promise((resolve, reject) => {
         const server = http.createServer((req, res) => {
-            const url = new URL(req.url, `http://localhost:${CALLBACK_PORT}`);
+            const url = new URL(req.url, `http://localhost:${OAUTH_CONFIG.callbackPort}`);
 
             if (url.pathname !== '/oauth-callback') {
                 res.writeHead(404);
@@ -158,14 +148,14 @@ export function startCallbackServer(expectedState, timeoutMs = 120000) {
 
         server.on('error', (err) => {
             if (err.code === 'EADDRINUSE') {
-                reject(new Error(`Port ${CALLBACK_PORT} is already in use. Close any other OAuth flows and try again.`));
+                reject(new Error(`Port ${OAUTH_CONFIG.callbackPort} is already in use. Close any other OAuth flows and try again.`));
             } else {
                 reject(err);
             }
         });
 
-        server.listen(CALLBACK_PORT, () => {
-            console.log(`[OAuth] Callback server listening on port ${CALLBACK_PORT}`);
+        server.listen(OAUTH_CONFIG.callbackPort, () => {
+            console.log(`[OAuth] Callback server listening on port ${OAUTH_CONFIG.callbackPort}`);
         });
 
         // Timeout after specified duration
@@ -178,20 +168,24 @@ export function startCallbackServer(expectedState, timeoutMs = 120000) {
 
 /**
  * Exchange authorization code for tokens
+ *
+ * @param {string} code - Authorization code from OAuth callback
+ * @param {string} verifier - PKCE code verifier
+ * @returns {Promise<{accessToken: string, refreshToken: string, expiresIn: number}>} OAuth tokens
  */
 export async function exchangeCode(code, verifier) {
-    const response = await fetch(GOOGLE_TOKEN_URL, {
+    const response = await fetch(OAUTH_CONFIG.tokenUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
         },
         body: new URLSearchParams({
-            client_id: GOOGLE_CLIENT_ID,
-            client_secret: GOOGLE_CLIENT_SECRET,
+            client_id: OAUTH_CONFIG.clientId,
+            client_secret: OAUTH_CONFIG.clientSecret,
             code: code,
             code_verifier: verifier,
             grant_type: 'authorization_code',
-            redirect_uri: REDIRECT_URI
+            redirect_uri: OAUTH_REDIRECT_URI
         })
     });
 
@@ -219,16 +213,19 @@ export async function exchangeCode(code, verifier) {
 
 /**
  * Refresh access token using refresh token
+ *
+ * @param {string} refreshToken - OAuth refresh token
+ * @returns {Promise<{accessToken: string, expiresIn: number}>} New access token
  */
 export async function refreshAccessToken(refreshToken) {
-    const response = await fetch(GOOGLE_TOKEN_URL, {
+    const response = await fetch(OAUTH_CONFIG.tokenUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
         },
         body: new URLSearchParams({
-            client_id: GOOGLE_CLIENT_ID,
-            client_secret: GOOGLE_CLIENT_SECRET,
+            client_id: OAUTH_CONFIG.clientId,
+            client_secret: OAUTH_CONFIG.clientSecret,
             refresh_token: refreshToken,
             grant_type: 'refresh_token'
         })
@@ -248,9 +245,12 @@ export async function refreshAccessToken(refreshToken) {
 
 /**
  * Get user email from access token
+ *
+ * @param {string} accessToken - OAuth access token
+ * @returns {Promise<string>} User's email address
  */
 export async function getUserEmail(accessToken) {
-    const response = await fetch(GOOGLE_USERINFO_URL, {
+    const response = await fetch(OAUTH_CONFIG.userInfoUrl, {
         headers: {
             'Authorization': `Bearer ${accessToken}`
         }
@@ -268,6 +268,9 @@ export async function getUserEmail(accessToken) {
 
 /**
  * Discover project ID for the authenticated user
+ *
+ * @param {string} accessToken - OAuth access token
+ * @returns {Promise<string|null>} Project ID or null if not found
  */
 export async function discoverProjectId(accessToken) {
     for (const endpoint of ANTIGRAVITY_ENDPOINT_FALLBACKS) {
@@ -308,6 +311,10 @@ export async function discoverProjectId(accessToken) {
 
 /**
  * Complete OAuth flow: exchange code and get all account info
+ *
+ * @param {string} code - Authorization code from OAuth callback
+ * @param {string} verifier - PKCE code verifier
+ * @returns {Promise<{email: string, refreshToken: string, accessToken: string, projectId: string|null}>} Complete account info
  */
 export async function completeOAuthFlow(code, verifier) {
     // Exchange code for tokens
