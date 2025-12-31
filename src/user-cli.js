@@ -10,7 +10,7 @@
  */
 
 import { randomBytes } from 'crypto';
-import { createUser, listUsers, deleteUser, getUserByName, updateUser } from './db/proxy-db.js';
+import { createUser, listUsers, deleteUser, getUserByName } from './db/proxy-db.js';
 
 const command = process.argv[2];
 const args = process.argv.slice(3);
