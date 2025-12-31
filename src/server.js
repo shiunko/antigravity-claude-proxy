@@ -9,6 +9,7 @@ import cors from 'cors';
 import { sendMessage, sendMessageStream, listModels, getModelQuotas } from './cloudcode-client.js';
 import { REQUEST_BODY_LIMIT } from './constants.js';
 import { AccountManager } from './account-manager.js';
+import { ModelAggregator } from './model-aggregator.js';
 import { formatDuration } from './utils/helpers.js';
 import { authenticateUser } from './middleware/auth.js';
 
@@ -16,6 +17,9 @@ const app = express();
 
 // Initialize account manager (will be fully initialized on first request or startup)
 const accountManager = new AccountManager();
+
+// Initialize model aggregator for virtual model resolution
+const modelAggregator = new ModelAggregator();
 
 // Track initialization status
 let isInitialized = false;
@@ -404,58 +408,120 @@ app.post('/v1/messages', async (req, res) => {
             });
         }
 
-        // Build the request object
-        const request = {
-            model: model || 'claude-3-5-sonnet-20241022',
-            messages,
-            max_tokens: max_tokens || 4096,
-            stream,
-            system,
-            tools,
-            tool_choice,
-            thinking,
-            top_p,
-            top_k,
-            temperature
-        };
+        const requestedModel = model || 'claude-3-5-sonnet-20241022';
 
-        console.log(`[API] Request from ${req.user.email} for model: ${request.model}, stream: ${!!stream}`);
+        // Resolve virtual model to candidate list
+        const candidateModels = modelAggregator.resolve(req.user.id, requestedModel);
+        const isVirtualModel = candidateModels.length > 1 || candidateModels[0] !== requestedModel;
 
-        if (stream) {
-            // Handle streaming response
-            res.setHeader('Content-Type', 'text/event-stream');
-            res.setHeader('Cache-Control', 'no-cache');
-            res.setHeader('Connection', 'keep-alive');
-            res.setHeader('X-Accel-Buffering', 'no');
+        if (isVirtualModel) {
+            console.log(`[Aggregator] User ${req.user.username} requesting '${requestedModel}' -> candidates: [${candidateModels.join(', ')}]`);
+        }
 
-            // Flush headers immediately to start the stream
-            if (res.flushHeaders) res.flushHeaders();
+        let lastError = null;
+        let success = false;
 
-            try {
-                // Use the streaming generator with account manager and user ID
-                for await (const event of sendMessageStream(request, accountManager, req.user.id)) {
-                    res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
-                    // Flush after each event for real-time streaming
-                    if (res.flush) res.flush();
-                }
-                res.end();
+        // Try each candidate model
+        for (const candidateModel of candidateModels) {
+            // Build the request object with current candidate model
+            const request = {
+                model: candidateModel,
+                messages,
+                max_tokens: max_tokens || 4096,
+                stream,
+                system,
+                tools,
+                tool_choice,
+                thinking,
+                top_p,
+                top_k,
+                temperature
+            };
 
-            } catch (streamError) {
-                console.error('[API] Stream error:', streamError);
-
-                const { errorType, errorMessage } = parseError(streamError);
-
-                res.write(`event: error\ndata: ${JSON.stringify({
-                    type: 'error',
-                    error: { type: errorType, message: errorMessage }
-                })}\n\n`);
-                res.end();
+            if (isVirtualModel) {
+                console.log(`[Aggregator] Trying model '${candidateModel}'...`);
+            } else {
+                console.log(`[API] Request from ${req.user.email} for model: ${request.model}, stream: ${!!stream}`);
             }
 
-        } else {
-            // Handle non-streaming response
-            const response = await sendMessage(request, accountManager, req.user.id);
-            res.json(response);
+            try {
+                if (stream) {
+                    // Handle streaming response
+                    res.setHeader('Content-Type', 'text/event-stream');
+                    res.setHeader('Cache-Control', 'no-cache');
+                    res.setHeader('Connection', 'keep-alive');
+                    res.setHeader('X-Accel-Buffering', 'no');
+
+                    // Flush headers immediately to start the stream
+                    if (res.flushHeaders) res.flushHeaders();
+
+                    try {
+                        // Use the streaming generator with account manager and user ID
+                        for await (const event of sendMessageStream(request, accountManager, req.user.id)) {
+                            res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+                            // Flush after each event for real-time streaming
+                            if (res.flush) res.flush();
+                        }
+                        res.end();
+                        success = true;
+                        break;
+
+                    } catch (streamError) {
+                        // Check if this is a rate limit error that should trigger failover
+                        if (modelAggregator.isRateLimitError(streamError) && candidateModels.indexOf(candidateModel) < candidateModels.length - 1) {
+                            console.warn(`[Aggregator] Model '${candidateModel}' rate limited. Failover to next candidate...`);
+                            lastError = streamError;
+                            // Note: For streaming, we may have already sent headers
+                            // If headers were sent, we can't failover - need to report error via SSE
+                            if (res.headersSent) {
+                                // Can't failover after streaming has started
+                                const { errorType, errorMessage } = parseError(streamError);
+                                res.write(`event: error\ndata: ${JSON.stringify({
+                                    type: 'error',
+                                    error: { type: errorType, message: errorMessage }
+                                })}\n\n`);
+                                res.end();
+                                return;
+                            }
+                            continue;
+                        }
+
+                        console.error('[API] Stream error:', streamError);
+                        const { errorType, errorMessage } = parseError(streamError);
+                        res.write(`event: error\ndata: ${JSON.stringify({
+                            type: 'error',
+                            error: { type: errorType, message: errorMessage }
+                        })}\n\n`);
+                        res.end();
+                        return;
+                    }
+
+                } else {
+                    // Handle non-streaming response
+                    const response = await sendMessage(request, accountManager, req.user.id);
+                    res.json(response);
+                    success = true;
+                    break;
+                }
+
+            } catch (error) {
+                lastError = error;
+
+                // Check if this is a rate limit error that should trigger failover
+                if (modelAggregator.isRateLimitError(error) && candidateModels.indexOf(candidateModel) < candidateModels.length - 1) {
+                    console.warn(`[Aggregator] Model '${candidateModel}' rate limited. Failover to next candidate...`);
+                    continue;
+                }
+
+                // For other errors, throw immediately
+                throw error;
+            }
+        }
+
+        // If all candidates failed
+        if (!success && lastError) {
+            console.error(`[Aggregator] All candidates for '${requestedModel}' failed.`);
+            throw lastError;
         }
 
     } catch (error) {

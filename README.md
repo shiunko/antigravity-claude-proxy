@@ -140,6 +140,68 @@ npm run users delete <username>
 
 ---
 
+## Model Groups (Virtual Model Aliases)
+
+Model Groups allow you to create virtual model aliases that map to multiple actual models. When a request comes in for a virtual model, the proxy will try each configured model in order until one succeeds. This is useful for:
+
+- **Failover**: Automatically fall back to backup models when the primary model is rate-limited
+- **Load Balancing**: Distribute requests across multiple models using random selection
+
+### Creating a Model Group
+
+```bash
+# Create a model group with priority strategy (failover in order)
+npm run users group:create <username> <alias> priority
+
+# Create a model group with random strategy (load balancing)
+npm run users group:create <username> <alias> random
+```
+
+### Adding Models to a Group
+
+```bash
+# Add models with priority order (lower number = higher priority)
+npm run users group:add <username> <alias> <model-name> <order>
+
+# Example: Create a "think-high" group with Claude as primary and Gemini as backup
+npm run users group:create alice think-high priority
+npm run users group:add alice think-high claude-opus-4-5-thinking 0
+npm run users group:add alice think-high gemini-2.5-pro 1
+```
+
+### Managing Model Groups
+
+```bash
+# List all model groups for a user
+npm run users group:list <username>
+
+# Remove a model from a group
+npm run users group:remove <username> <alias> <model-name>
+
+# Delete a model group
+npm run users group:delete <username> <alias>
+```
+
+### Using Virtual Models
+
+Once configured, use the virtual model alias in your Claude Code settings:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "sk-proxy-...",
+    "ANTHROPIC_BASE_URL": "http://localhost:8080",
+    "ANTHROPIC_MODEL": "think-high"
+  }
+}
+```
+
+When a request comes in for `think-high`:
+1. The proxy first tries `claude-opus-4-5-thinking`
+2. If rate-limited (429), it automatically fails over to `gemini-2.5-pro`
+
+---
+
 ## Using with Claude Code CLI
 
 ### Configure Claude Code

@@ -16,6 +16,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Create: `npm run users create <username>`
   - List: `npm run users list`
   - Delete: `npm run users delete <username>`
+- **Model Groups** (virtual model aliases with failover):
+  - Create: `npm run users group:create <user> <alias> [strategy]`
+  - Add model: `npm run users group:add <user> <alias> <model> [order]`
+  - List: `npm run users group:list <user>`
+  - Delete: `npm run users group:delete <user> <alias>`
+  - Remove model: `npm run users group:remove <user> <alias> <model>`
 - **Testing**:
   - **Prerequisite**: Server must be running (`npm start`) in a separate terminal.
   - Run all: `npm test`
@@ -42,7 +48,8 @@ This is a proxy server that exposes an Anthropic-compatible API but forwards req
 **Key Components**
 - **`src/server.js`**: Express server handling `/v1/messages`, `/health`, etc.
 - **`src/account-manager.js`**: Manages multiple accounts, handles rate limits (429), and implements sticky sessions for prompt caching.
-- **`src/db/proxy-db.js`**: SQLite database interface for storing users and accounts.
+- **`src/model-aggregator.js`**: Resolves virtual model aliases to actual models with failover support.
+- **`src/db/proxy-db.js`**: SQLite database interface for storing users, accounts, and model groups.
 - **`src/format/`**:
   - `thinking-utils.js`: Handles "thinking" blocks, signature validation, and recovery from corrupted states.
   - `signature-cache.js`: Caches signatures to restore them when stripped by clients.
@@ -54,6 +61,7 @@ This is a proxy server that exposes an Anthropic-compatible API but forwards req
 - **Prompt Caching**: Uses a stable session ID (hash of first user message) to keep requests on the same account.
 - **Thinking Blocks**: Gemini's `thought` parts are converted to Anthropic's `thinking` blocks. Signatures are preserved/cached to satisfy API requirements.
 - **Model Families**: `claude-*` models use `signature`; `gemini-*` models use `thoughtSignature`.
+- **Model Aggregation**: Virtual model aliases can map to multiple actual models. Supports `priority` (failover in order) and `random` (load balancing) strategies.
 
 ## Code Style & Conventions
 

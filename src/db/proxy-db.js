@@ -63,6 +63,30 @@ function initDb(db) {
             UNIQUE(user_id, email)
         )
     `);
+
+    // Model groups table - defines virtual model aliases
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS model_groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            alias TEXT NOT NULL,
+            strategy TEXT DEFAULT 'priority',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(user_id, alias)
+        )
+    `);
+
+    // Model group items table - defines actual models in each group
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS model_group_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            model_name TEXT NOT NULL,
+            order_index INTEGER DEFAULT 0,
+            FOREIGN KEY(group_id) REFERENCES model_groups(id) ON DELETE CASCADE
+        )
+    `);
 }
 
 // --- User Operations ---
@@ -161,4 +185,66 @@ export function clearExpiredRateLimits() {
         WHERE is_rate_limited = 1 AND rate_limit_reset_time <= ?
     `);
     return stmt.run(now);
+}
+
+// --- Model Group Operations ---
+
+export function createModelGroup(userId, alias, strategy = 'priority') {
+    const db = getDb();
+    const stmt = db.prepare('INSERT INTO model_groups (user_id, alias, strategy) VALUES (?, ?, ?)');
+    return stmt.run(userId, alias, strategy);
+}
+
+export function addModelToGroup(groupId, modelName, orderIndex = 0) {
+    const db = getDb();
+    const stmt = db.prepare('INSERT INTO model_group_items (group_id, model_name, order_index) VALUES (?, ?, ?)');
+    return stmt.run(groupId, modelName, orderIndex);
+}
+
+export function getModelGroup(userId, alias) {
+    const db = getDb();
+    const groupStmt = db.prepare('SELECT * FROM model_groups WHERE user_id = ? AND alias = ?');
+    const group = groupStmt.get(userId, alias);
+
+    if (!group) {
+        return null;
+    }
+
+    const itemsStmt = db.prepare('SELECT * FROM model_group_items WHERE group_id = ? ORDER BY order_index ASC');
+    const items = itemsStmt.all(group.id);
+
+    return {
+        ...group,
+        items
+    };
+}
+
+export function listModelGroups(userId) {
+    const db = getDb();
+    const groupsStmt = db.prepare('SELECT * FROM model_groups WHERE user_id = ?');
+    const groups = groupsStmt.all(userId);
+
+    return groups.map(group => {
+        const itemsStmt = db.prepare('SELECT * FROM model_group_items WHERE group_id = ? ORDER BY order_index ASC');
+        const items = itemsStmt.all(group.id);
+        return { ...group, items };
+    });
+}
+
+export function deleteModelGroup(userId, alias) {
+    const db = getDb();
+    const stmt = db.prepare('DELETE FROM model_groups WHERE user_id = ? AND alias = ?');
+    return stmt.run(userId, alias);
+}
+
+export function removeModelFromGroup(groupId, modelName) {
+    const db = getDb();
+    const stmt = db.prepare('DELETE FROM model_group_items WHERE group_id = ? AND model_name = ?');
+    return stmt.run(groupId, modelName);
+}
+
+export function getModelGroupById(groupId) {
+    const db = getDb();
+    const stmt = db.prepare('SELECT * FROM model_groups WHERE id = ?');
+    return stmt.get(groupId);
 }

@@ -140,6 +140,68 @@ npm run users delete <username>
 
 ---
 
+## 模型组（虚拟模型别名）
+
+模型组允许你创建映射到多个实际模型的虚拟模型别名。当收到虚拟模型的请求时，代理会按顺序尝试每个配置的模型，直到有一个成功。这对以下场景非常有用：
+
+- **故障转移 (Failover)**：当主模型被限速时，自动回退到备用模型
+- **负载均衡 (Load Balancing)**：使用随机选择在多个模型之间分配请求
+
+### 创建模型组
+
+```bash
+# 创建优先级策略的模型组（按顺序故障转移）
+npm run users group:create <username> <alias> priority
+
+# 创建随机策略的模型组（负载均衡）
+npm run users group:create <username> <alias> random
+```
+
+### 向组中添加模型
+
+```bash
+# 添加带优先级顺序的模型（数字越小优先级越高）
+npm run users group:add <username> <alias> <model-name> <order>
+
+# 示例：创建一个 "think-high" 组，Claude 作为主模型，Gemini 作为备用
+npm run users group:create alice think-high priority
+npm run users group:add alice think-high claude-opus-4-5-thinking 0
+npm run users group:add alice think-high gemini-2.5-pro 1
+```
+
+### 管理模型组
+
+```bash
+# 列出用户的所有模型组
+npm run users group:list <username>
+
+# 从组中移除模型
+npm run users group:remove <username> <alias> <model-name>
+
+# 删除模型组
+npm run users group:delete <username> <alias>
+```
+
+### 使用虚拟模型
+
+配置完成后，在 Claude Code 设置中使用虚拟模型别名：
+
+```json
+{
+  "env": {
+    "ANTHROPIC_AUTH_TOKEN": "sk-proxy-...",
+    "ANTHROPIC_BASE_URL": "http://localhost:8080",
+    "ANTHROPIC_MODEL": "think-high"
+  }
+}
+```
+
+当收到 `think-high` 的请求时：
+1. 代理首先尝试 `claude-opus-4-5-thinking`
+2. 如果被限速（429），自动故障转移到 `gemini-2.5-pro`
+
+---
+
 ## 在 Claude Code CLI 中使用
 
 ### 配置 Claude Code
