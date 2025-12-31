@@ -7,10 +7,10 @@
 import express from 'express';
 import cors from 'cors';
 import { sendMessage, sendMessageStream, listModels, getModelQuotas } from './cloudcode-client.js';
-import { forceRefresh } from './token-extractor.js';
 import { REQUEST_BODY_LIMIT } from './constants.js';
 import { AccountManager } from './account-manager.js';
 import { formatDuration } from './utils/helpers.js';
+import { authenticateUser } from './middleware/auth.js';
 
 const app = express();
 
@@ -35,8 +35,7 @@ async function ensureInitialized() {
         try {
             await accountManager.initialize();
             isInitialized = true;
-            const status = accountManager.getStatus();
-            console.log(`[Server] Account pool initialized: ${status.summary}`);
+            console.log('[Server] Account pool initialized with SQLite');
         } catch (error) {
             initError = error;
             initPromise = null; // Allow retry on failure
@@ -52,6 +51,9 @@ async function ensureInitialized() {
 app.use(cors());
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
 
+// Apply authentication middleware to all routes (except health which is handled inside authenticateUser)
+app.use(authenticateUser);
+
 /**
  * Parse error message to extract error type, status code, and user-friendly message
  */
@@ -60,10 +62,10 @@ function parseError(error) {
     let statusCode = 500;
     let errorMessage = error.message;
 
-    if (error.message.includes('401') || error.message.includes('UNAUTHENTICATED')) {
+    if (error.message.includes('401') || error.message.includes('UNAUTHENTICATED') || error.message.includes('AUTH_INVALID')) {
         errorType = 'authentication_error';
         statusCode = 401;
-        errorMessage = 'Authentication failed. Make sure Antigravity is running with a valid token.';
+        errorMessage = 'Authentication failed. Make sure your account is properly configured and tokens are valid.';
     } else if (error.message.includes('429') || error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('QUOTA_EXHAUSTED')) {
         errorType = 'invalid_request_error';  // Use invalid_request_error to force client to purge/stop
         statusCode = 400;  // Use 400 to ensure client does not retry (429 and 529 trigger retries)
@@ -86,11 +88,11 @@ function parseError(error) {
     } else if (error.message.includes('All endpoints failed')) {
         errorType = 'api_error';
         statusCode = 503;
-        errorMessage = 'Unable to connect to Claude API. Check that Antigravity is running.';
+        errorMessage = 'Unable to connect to Claude API. Check your upstream connection.';
     } else if (error.message.includes('PERMISSION_DENIED')) {
         errorType = 'permission_error';
         statusCode = 403;
-        errorMessage = 'Permission denied. Check your Antigravity license.';
+        errorMessage = 'Permission denied. Check your project access.';
     }
 
     return { errorType, statusCode, errorMessage };
@@ -98,7 +100,8 @@ function parseError(error) {
 
 // Request logging middleware
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+    const userEmail = req.user ? req.user.email : 'anonymous';
+    console.log(`[${new Date().toISOString()}] ${userEmail} - ${req.method} ${req.path}`);
     next();
 });
 
@@ -108,14 +111,8 @@ app.use((req, res, next) => {
 app.get('/health', async (req, res) => {
     try {
         await ensureInitialized();
-        const status = accountManager.getStatus();
-
         res.json({
             status: 'ok',
-            accounts: status.summary,
-            available: status.available,
-            rateLimited: status.rateLimited,
-            invalid: status.invalid,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
@@ -130,23 +127,30 @@ app.get('/health', async (req, res) => {
 /**
  * Account limits endpoint - fetch quota/limits for all accounts × all models
  * Returns a table showing remaining quota and reset time for each combination
- * Use ?format=table for ASCII table output, default is JSON
  */
 app.get('/account-limits', async (req, res) => {
     try {
         await ensureInitialized();
-        const allAccounts = accountManager.getAllAccounts();
+        const userId = req.user.id;
+        const allAccounts = accountManager.getAccounts(userId);
         const format = req.query.format || 'json';
+
+        if (allAccounts.length === 0) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'No accounts found for this user. Add accounts using "npm run accounts:add".'
+            });
+        }
 
         // Fetch quotas for each account in parallel
         const results = await Promise.allSettled(
             allAccounts.map(async (account) => {
                 // Skip invalid accounts
-                if (account.isInvalid) {
+                if (account.is_invalid) {
                     return {
                         email: account.email,
                         status: 'invalid',
-                        error: account.invalidReason,
+                        error: account.invalid_reason,
                         models: {}
                     };
                 }
@@ -202,15 +206,11 @@ app.get('/account-limits', async (req, res) => {
             // Build table
             const lines = [];
             const timestamp = new Date().toLocaleString();
-            lines.push(`Account Limits (${timestamp})`);
-
-            // Get account status info
-            const status = accountManager.getStatus();
-            lines.push(`Accounts: ${status.total} total, ${status.available} available, ${status.rateLimited} rate-limited, ${status.invalid} invalid`);
+            lines.push(`Account Limits for ${req.user.email} (${timestamp})`);
             lines.push('');
 
             // Table 1: Account status
-            const accColWidth = 25;
+            const accColWidth = 30;
             const statusColWidth = 15;
             const lastUsedColWidth = 25;
             const resetColWidth = 25;
@@ -219,17 +219,18 @@ app.get('/account-limits', async (req, res) => {
             lines.push(accHeader);
             lines.push('─'.repeat(accColWidth + statusColWidth + lastUsedColWidth + resetColWidth));
 
-            for (const acc of status.accounts) {
-                const shortEmail = acc.email.split('@')[0].slice(0, 22);
-                const lastUsed = acc.lastUsed ? new Date(acc.lastUsed).toLocaleString() : 'never';
+            for (let i = 0; i < allAccounts.length; i++) {
+                const acc = allAccounts[i];
+                const shortEmail = acc.email.length > (accColWidth - 3) ? acc.email.slice(0, accColWidth - 6) + '...' : acc.email;
+                const lastUsed = acc.last_used ? new Date(acc.last_used).toLocaleString() : 'never';
 
                 // Get status and error from accountLimits
                 const accLimit = accountLimits.find(a => a.email === acc.email);
                 let accStatus;
-                if (acc.isInvalid) {
+                if (acc.is_invalid) {
                     accStatus = 'invalid';
-                } else if (acc.isRateLimited) {
-                    const remaining = acc.rateLimitResetTime ? acc.rateLimitResetTime - Date.now() : 0;
+                } else if (acc.is_rate_limited) {
+                    const remaining = acc.rate_limit_reset_time ? acc.rate_limit_reset_time - Date.now() : 0;
                     accStatus = remaining > 0 ? `limited (${formatDuration(remaining)})` : 'rate-limited';
                 } else {
                     accStatus = accLimit?.status || 'ok';
@@ -254,7 +255,7 @@ app.get('/account-limits', async (req, res) => {
             }
             lines.push('');
 
-            // Calculate column widths
+            // Calculate column widths for models table
             const modelColWidth = Math.max(25, ...sortedModels.map(m => m.length)) + 2;
             const accountColWidth = 22;
 
@@ -294,6 +295,7 @@ app.get('/account-limits', async (req, res) => {
         // Default: JSON format
         res.json({
             timestamp: new Date().toLocaleString(),
+            user: req.user.email,
             totalAccounts: allAccounts.length,
             models: sortedModels,
             accounts: accountLimits.map(acc => ({
@@ -326,42 +328,18 @@ app.get('/account-limits', async (req, res) => {
 });
 
 /**
- * Force token refresh endpoint
- */
-app.post('/refresh-token', async (req, res) => {
-    try {
-        await ensureInitialized();
-        // Clear all caches
-        accountManager.clearTokenCache();
-        accountManager.clearProjectCache();
-        // Force refresh default token
-        const token = await forceRefresh();
-        res.json({
-            status: 'ok',
-            message: 'Token caches cleared and refreshed',
-            tokenPrefix: token.substring(0, 10) + '...'
-        });
-    } catch (error) {
-        res.status(500).json({
-            status: 'error',
-            error: error.message
-        });
-    }
-});
-
-/**
  * List models endpoint (OpenAI-compatible format)
  */
 app.get('/v1/models', async (req, res) => {
     try {
         await ensureInitialized();
-        const account = accountManager.pickNext();
+        const account = accountManager.pickNext(req.user.id);
         if (!account) {
             return res.status(503).json({
                 type: 'error',
                 error: {
                     type: 'api_error',
-                    message: 'No accounts available'
+                    message: 'No accounts available for your user. Please add accounts or wait for rate limits to reset.'
                 }
             });
         }
@@ -400,13 +378,6 @@ app.post('/v1/messages', async (req, res) => {
     try {
         // Ensure account manager is initialized
         await ensureInitialized();
-
-        // Optimistic Retry: If ALL accounts are rate-limited, reset them to force a fresh check.
-        // If we have some available accounts, we try them first.
-        if (accountManager.isAllRateLimited()) {
-            console.log('[Server] All accounts rate-limited. Resetting state for optimistic retry.');
-            accountManager.resetAllRateLimits();
-        }
 
         const {
             model,
@@ -448,18 +419,7 @@ app.post('/v1/messages', async (req, res) => {
             temperature
         };
 
-        console.log(`[API] Request for model: ${request.model}, stream: ${!!stream}`);
-
-        // Debug: Log message structure to diagnose tool_use/tool_result ordering
-        if (process.env.DEBUG) {
-            console.log('[API] Message structure:');
-            messages.forEach((msg, i) => {
-                const contentTypes = Array.isArray(msg.content)
-                    ? msg.content.map(c => c.type || 'text').join(', ')
-                    : (typeof msg.content === 'string' ? 'text' : 'unknown');
-                console.log(`  [${i}] ${msg.role}: ${contentTypes}`);
-            });
-        }
+        console.log(`[API] Request from ${req.user.email} for model: ${request.model}, stream: ${!!stream}`);
 
         if (stream) {
             // Handle streaming response
@@ -469,11 +429,11 @@ app.post('/v1/messages', async (req, res) => {
             res.setHeader('X-Accel-Buffering', 'no');
 
             // Flush headers immediately to start the stream
-            res.flushHeaders();
+            if (res.flushHeaders) res.flushHeaders();
 
             try {
-                // Use the streaming generator with account manager
-                for await (const event of sendMessageStream(request, accountManager)) {
+                // Use the streaming generator with account manager and user ID
+                for await (const event of sendMessageStream(request, accountManager, req.user.id)) {
                     res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
                     // Flush after each event for real-time streaming
                     if (res.flush) res.flush();
@@ -494,27 +454,14 @@ app.post('/v1/messages', async (req, res) => {
 
         } else {
             // Handle non-streaming response
-            const response = await sendMessage(request, accountManager);
+            const response = await sendMessage(request, accountManager, req.user.id);
             res.json(response);
         }
 
     } catch (error) {
         console.error('[API] Error:', error);
 
-        let { errorType, statusCode, errorMessage } = parseError(error);
-
-        // For auth errors, try to refresh token
-        if (errorType === 'authentication_error') {
-            console.log('[API] Token might be expired, attempting refresh...');
-            try {
-                accountManager.clearProjectCache();
-                accountManager.clearTokenCache();
-                await forceRefresh();
-                errorMessage = 'Token was expired and has been refreshed. Please retry your request.';
-            } catch (refreshError) {
-                errorMessage = 'Could not refresh token. Make sure Antigravity is running.';
-            }
-        }
+        const { errorType, statusCode, errorMessage } = parseError(error);
 
         console.log(`[API] Returning error response: ${statusCode} ${errorType} - ${errorMessage}`);
 

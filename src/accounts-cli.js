@@ -10,16 +10,14 @@
  *   node src/accounts-cli.js          # Interactive mode
  *   node src/accounts-cli.js add      # Add new account(s)
  *   node src/accounts-cli.js list     # List all accounts
- *   node src/accounts-cli.js clear    # Remove all accounts
+ *   node src/accounts-cli.js remove   # Remove accounts
+ *   node src/accounts-cli.js verify   # Verify account tokens
  */
 
 import { createInterface } from 'readline/promises';
 import { stdin, stdout } from 'process';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
 import { exec } from 'child_process';
-import net from 'net';
-import { ACCOUNT_CONFIG_PATH, DEFAULT_PORT, MAX_ACCOUNTS } from './constants.js';
+import { DEFAULT_PORT, MAX_ACCOUNTS } from './constants.js';
 import {
     getAuthorizationUrl,
     startCallbackServer,
@@ -27,63 +25,25 @@ import {
     refreshAccessToken,
     getUserEmail
 } from './oauth.js';
+import {
+    listUsers,
+    createUser,
+    getAccountsForUser,
+    addAccount as addAccountToDb,
+    deleteAccount as deleteAccountFromDb,
+    updateAccount
+} from './db/proxy-db.js';
 
-const SERVER_PORT = process.env.PORT || DEFAULT_PORT;
+// --- UI Helpers ---
 
-/**
- * Check if the Antigravity Proxy server is running
- * Returns true if port is occupied
- */
-function isServerRunning() {
-    return new Promise((resolve) => {
-        const socket = new net.Socket();
-        socket.setTimeout(1000);
-
-        socket.on('connect', () => {
-            socket.destroy();
-            resolve(true); // Server is running
-        });
-
-        socket.on('timeout', () => {
-            socket.destroy();
-            resolve(false);
-        });
-
-        socket.on('error', (err) => {
-            socket.destroy();
-            resolve(false); // Port free
-        });
-
-        socket.connect(SERVER_PORT, 'localhost');
-    });
-}
-
-/**
- * Enforce that server is stopped before proceeding
- */
-async function ensureServerStopped() {
-    const isRunning = await isServerRunning();
-    if (isRunning) {
-        console.error(`
-\x1b[31mError: Antigravity Proxy server is currently running on port ${SERVER_PORT}.\x1b[0m
-
-Please stop the server (Ctrl+C) before adding or managing accounts.
-This ensures that your account changes are loaded correctly when you restart the server.
-`);
-        process.exit(1);
-    }
-}
-
-/**
- * Create readline interface
- */
 function createRL() {
     return createInterface({ input: stdin, output: stdout });
 }
 
-/**
- * Open URL in default browser
- */
+async function askQuestion(rl, query) {
+    return await rl.question(query);
+}
+
 function openBrowser(url) {
     const platform = process.platform;
     let command;
@@ -104,334 +64,262 @@ function openBrowser(url) {
     });
 }
 
-/**
- * Load existing accounts from config
- */
-function loadAccounts() {
-    try {
-        if (existsSync(ACCOUNT_CONFIG_PATH)) {
-            const data = readFileSync(ACCOUNT_CONFIG_PATH, 'utf-8');
-            const config = JSON.parse(data);
-            return config.accounts || [];
-        }
-    } catch (error) {
-        console.error('Error loading accounts:', error.message);
-    }
-    return [];
-}
+// --- User Selection ---
 
-/**
- * Save accounts to config
- */
-function saveAccounts(accounts, settings = {}) {
-    try {
-        const dir = dirname(ACCOUNT_CONFIG_PATH);
-        if (!existsSync(dir)) {
-            mkdirSync(dir, { recursive: true });
+async function selectUser(rl, argsUser) {
+    // 1. If user provided via flag (not implemented in args parsing yet, but planned)
+    if (argsUser) {
+        const users = listUsers();
+        const match = users.find(u => u.username === argsUser);
+        if (match) return match;
+        console.error(`User '${argsUser}' not found.`);
+        process.exit(1);
+    }
+
+    // 2. Interactive selection
+    const users = listUsers();
+
+    if (users.length === 0) {
+        console.log('\nNo users found in the database.');
+        const answer = await askQuestion(rl, 'Would you like to create a new user now? [Y/n]: ');
+        if (answer.toLowerCase() === 'n') {
+            process.exit(0);
         }
 
-        const config = {
-            accounts: accounts.map(acc => ({
-                email: acc.email,
-                source: 'oauth',
-                refreshToken: acc.refreshToken,
-                projectId: acc.projectId,
-                addedAt: acc.addedAt || new Date().toISOString(),
-                lastUsed: acc.lastUsed || null,
-                isRateLimited: acc.isRateLimited || false,
-                rateLimitResetTime: acc.rateLimitResetTime || null
-            })),
-            settings: {
-                cooldownDurationMs: 60000,
-                maxRetries: 5,
-                ...settings
-            },
-            activeIndex: 0
-        };
+        const username = await askQuestion(rl, 'Enter new username: ');
+        if (!username) process.exit(1);
 
-        writeFileSync(ACCOUNT_CONFIG_PATH, JSON.stringify(config, null, 2));
-        console.log(`\n✓ Saved ${accounts.length} account(s) to ${ACCOUNT_CONFIG_PATH}`);
-    } catch (error) {
-        console.error('Error saving accounts:', error.message);
-        throw error;
+        // Generate a random key for them (conceptually similar to user-cli)
+        const { randomBytes } = await import('crypto');
+        const apiKey = 'sk-proxy-' + randomBytes(24).toString('hex');
+
+        try {
+            createUser(username, apiKey);
+            console.log(`User '${username}' created.`);
+            console.log(`API Key: ${apiKey} (Save this!)`);
+            return listUsers().find(u => u.username === username);
+        } catch (e) {
+            console.error('Failed to create user:', e.message);
+            process.exit(1);
+        }
+    }
+
+    if (users.length === 1) {
+        console.log(`Using user: ${users[0].username}`);
+        return users[0];
+    }
+
+    console.log('\nSelect User:');
+    users.forEach((u, i) => {
+        console.log(`${i + 1}. ${u.username}`);
+    });
+
+    while (true) {
+        const answer = await askQuestion(rl, '\nEnter number (or 0 to exit): ');
+        const idx = parseInt(answer, 10);
+        if (idx === 0) process.exit(0);
+
+        if (idx > 0 && idx <= users.length) {
+            return users[idx - 1];
+        }
+        console.log('Invalid selection.');
     }
 }
 
-/**
- * Display current accounts
- */
-function displayAccounts(accounts) {
-    if (accounts.length === 0) {
-        console.log('\nNo accounts configured.');
+// --- Actions ---
+
+async function addAccount(rl, user) {
+    console.log(`\n=== Add Google Account for ${user.username} ===\n`);
+
+    const accounts = getAccountsForUser(user.id);
+    if (accounts.length >= MAX_ACCOUNTS) {
+        console.log(`Max accounts (${MAX_ACCOUNTS}) reached for this user.`);
         return;
     }
 
-    console.log(`\n${accounts.length} account(s) saved:`);
-    accounts.forEach((acc, i) => {
-        const status = acc.isRateLimited ? ' (rate-limited)' : '';
-        console.log(`  ${i + 1}. ${acc.email}${status}`);
-    });
-}
-
-/**
- * Add a new account via OAuth with automatic callback
- */
-async function addAccount(existingAccounts) {
-    console.log('\n=== Add Google Account ===\n');
-
-    // Generate authorization URL
+    // OAuth Flow
     const { url, verifier, state } = getAuthorizationUrl();
 
     console.log('Opening browser for Google sign-in...');
-    console.log('(If browser does not open, copy this URL manually)\n');
-    console.log(`   ${url}\n`);
-
-    // Open browser
+    console.log(`URL: ${url}\n`);
     openBrowser(url);
 
-    // Start callback server and wait for code
-    console.log('Waiting for authentication (timeout: 2 minutes)...\n');
+    console.log('Waiting for authentication (timeout: 2 minutes)...');
 
     try {
         const code = await startCallbackServer(state);
+        console.log('Received code, exchanging for tokens...');
 
-        console.log('Received authorization code. Exchanging for tokens...');
         const result = await completeOAuthFlow(code, verifier);
 
-        // Check if account already exists
-        const existing = existingAccounts.find(a => a.email === result.email);
+        // Check for duplicates
+        const existing = accounts.find(a => a.email === result.email);
         if (existing) {
-            console.log(`\n⚠ Account ${result.email} already exists. Updating tokens.`);
-            existing.refreshToken = result.refreshToken;
-            existing.projectId = result.projectId;
-            existing.addedAt = new Date().toISOString();
-            return null; // Don't add duplicate
-        }
-
-        console.log(`\n✓ Successfully authenticated: ${result.email}`);
-        if (result.projectId) {
-            console.log(`  Project ID: ${result.projectId}`);
-        }
-
-        return {
-            email: result.email,
-            refreshToken: result.refreshToken,
-            projectId: result.projectId,
-            addedAt: new Date().toISOString(),
-            isRateLimited: false,
-            rateLimitResetTime: null
-        };
-    } catch (error) {
-        console.error(`\n✗ Authentication failed: ${error.message}`);
-        return null;
-    }
-}
-
-/**
- * Interactive remove accounts flow
- */
-async function interactiveRemove(rl) {
-    while (true) {
-        const accounts = loadAccounts();
-        if (accounts.length === 0) {
-            console.log('\nNo accounts to remove.');
+            console.log(`\n⚠ Account ${result.email} already exists. Updating tokens...`);
+            updateAccount(existing.id, {
+                refresh_token: result.refreshToken,
+                project_id: result.projectId,
+                is_invalid: 0,
+                invalid_reason: null
+            });
+            console.log('Updated successfully.');
             return;
         }
 
-        displayAccounts(accounts);
-        console.log('\nEnter account number to remove (or 0 to cancel)');
+        // Insert
+        addAccountToDb({
+            user_id: user.id,
+            email: result.email,
+            source: 'oauth',
+            refresh_token: result.refreshToken,
+            project_id: result.projectId,
+            added_at: Date.now()
+        });
 
-        const answer = await rl.question('> ');
-        const index = parseInt(answer, 10);
+        console.log(`\n✓ Successfully added: ${result.email}`);
+        if (result.projectId) console.log(`  Project: ${result.projectId}`);
 
-        if (isNaN(index) || index < 0 || index > accounts.length) {
-            console.log('\n❌ Invalid selection.');
-            continue;
-        }
-
-        if (index === 0) {
-            return; // Exit
-        }
-
-        const removed = accounts[index - 1]; // 1-based to 0-based
-        const confirm = await rl.question(`\nAre you sure you want to remove ${removed.email}? [y/N]: `);
-
-        if (confirm.toLowerCase() === 'y') {
-            accounts.splice(index - 1, 1);
-            saveAccounts(accounts);
-            console.log(`\n✓ Removed ${removed.email}`);
-        } else {
-            console.log('\nCancelled.');
-        }
-
-        const removeMore = await rl.question('\nRemove another account? [y/N]: ');
-        if (removeMore.toLowerCase() !== 'y') {
-            break;
-        }
+    } catch (error) {
+        console.error(`\n✗ Authentication failed: ${error.message}`);
     }
 }
 
-/**
- * Interactive add accounts flow (Main Menu)
- */
-async function interactiveAdd(rl) {
-    const accounts = loadAccounts();
-
-    if (accounts.length > 0) {
-        displayAccounts(accounts);
-
-        const choice = await rl.question('\n(a)dd new, (r)emove existing, or (f)resh start? [a/r/f]: ');
-        const c = choice.toLowerCase();
-
-        if (c === 'r') {
-            await interactiveRemove(rl);
-            return; // Return to main or exit? Given this is "add", we probably exit after sub-task.
-        } else if (c === 'f') {
-            console.log('\nStarting fresh - existing accounts will be replaced.');
-            accounts.length = 0;
-        } else if (c === 'a') {
-            console.log('\nAdding to existing accounts.');
-        } else {
-            console.log('\nInvalid choice, defaulting to add.');
-        }
-    }
-
-    // Add accounts loop
-    while (accounts.length < MAX_ACCOUNTS) {
-        const newAccount = await addAccount(accounts);
-        if (newAccount) {
-            accounts.push(newAccount);
-            // Auto-save after each successful add to prevent data loss
-            saveAccounts(accounts);
-        } else if (accounts.length > 0) {
-            // Even if newAccount is null (duplicate update), save the updated accounts
-            saveAccounts(accounts);
-        }
-
-        if (accounts.length >= MAX_ACCOUNTS) {
-            console.log(`\nMaximum of ${MAX_ACCOUNTS} accounts reached.`);
-            break;
-        }
-
-        const addMore = await rl.question('\nAdd another account? [y/N]: ');
-        if (addMore.toLowerCase() !== 'y') {
-            break;
-        }
-    }
-
-    if (accounts.length > 0) {
-        displayAccounts(accounts);
-    } else {
-        console.log('\nNo accounts to save.');
-    }
-}
-
-/**
- * List accounts
- */
-async function listAccounts() {
-    const accounts = loadAccounts();
-    displayAccounts(accounts);
-
-    if (accounts.length > 0) {
-        console.log(`\nConfig file: ${ACCOUNT_CONFIG_PATH}`);
-    }
-}
-
-/**
- * Clear all accounts
- */
-async function clearAccounts(rl) {
-    const accounts = loadAccounts();
+async function listAccountsAction(user) {
+    const accounts = getAccountsForUser(user.id);
+    console.log(`\nAccounts for ${user.username} (${accounts.length}):`);
 
     if (accounts.length === 0) {
-        console.log('No accounts to clear.');
+        console.log('  (None)');
         return;
     }
 
-    displayAccounts(accounts);
+    accounts.forEach((acc, i) => {
+        const status = acc.is_invalid
+            ? 'INVALID'
+            : (acc.is_rate_limited ? 'RATE LIMITED' : 'OK');
 
-    const confirm = await rl.question('\nAre you sure you want to remove all accounts? [y/N]: ');
-    if (confirm.toLowerCase() === 'y') {
-        saveAccounts([]);
-        console.log('All accounts removed.');
-    } else {
-        console.log('Cancelled.');
+        console.log(`  ${i+1}. ${acc.email} [${status}]`);
+        if (acc.project_id) console.log(`     Project: ${acc.project_id}`);
+    });
+}
+
+async function removeAccount(rl, user) {
+    const accounts = getAccountsForUser(user.id);
+    if (accounts.length === 0) {
+        console.log('No accounts to remove.');
+        return;
+    }
+
+    await listAccountsAction(user);
+
+    const answer = await askQuestion(rl, '\nEnter number to remove (or 0 to cancel): ');
+    const idx = parseInt(answer, 10);
+
+    if (idx > 0 && idx <= accounts.length) {
+        const acc = accounts[idx - 1];
+        const confirm = await askQuestion(rl, `Remove ${acc.email}? [y/N]: `);
+        if (confirm.toLowerCase() === 'y') {
+            deleteAccountFromDb(user.id, acc.email);
+            console.log('Removed.');
+        }
     }
 }
 
-/**
- * Verify accounts (test refresh tokens)
- */
-async function verifyAccounts() {
-    const accounts = loadAccounts();
-
+async function verifyAccountsAction(user) {
+    const accounts = getAccountsForUser(user.id);
     if (accounts.length === 0) {
         console.log('No accounts to verify.');
         return;
     }
 
-    console.log('\nVerifying accounts...\n');
+    console.log(`\nVerifying accounts for ${user.username}...\n`);
 
-    for (const account of accounts) {
-        try {
-            const tokens = await refreshAccessToken(account.refreshToken);
-            const email = await getUserEmail(tokens.accessToken);
-            console.log(`  ✓ ${email} - OK`);
-        } catch (error) {
-            console.log(`  ✗ ${account.email} - ${error.message}`);
+    for (const acc of accounts) {
+        process.stdout.write(`  ${acc.email} ... `);
+
+        if (acc.source === 'oauth' && acc.refresh_token) {
+            try {
+                const tokens = await refreshAccessToken(acc.refresh_token);
+                // Optionally update DB with new access token
+                updateAccount(acc.id, {
+                    access_token: tokens.accessToken,
+                    is_invalid: 0,
+                    invalid_reason: null
+                });
+                console.log('OK');
+            } catch (e) {
+                console.log(`FAIL (${e.message})`);
+                updateAccount(acc.id, {
+                    is_invalid: 1,
+                    invalid_reason: e.message
+                });
+            }
+        } else {
+            console.log('SKIP (Not OAuth)');
         }
     }
 }
 
-/**
- * Main CLI
- */
+// --- Main ---
+
 async function main() {
     const args = process.argv.slice(2);
-    const command = args[0] || 'add';
+    const command = args[0] || 'menu';
 
-    console.log('╔════════════════════════════════════════╗');
-    console.log('║   Antigravity Proxy Account Manager    ║');
-    console.log('╚════════════════════════════════════════╝');
+    // Parse --user flag if present
+    const userFlagIdx = args.indexOf('--user');
+    let userArg = null;
+    if (userFlagIdx !== -1 && args[userFlagIdx + 1]) {
+        userArg = args[userFlagIdx + 1];
+    }
 
     const rl = createRL();
 
     try {
-        switch (command) {
-            case 'add':
-                await ensureServerStopped();
-                await interactiveAdd(rl);
-                break;
-            case 'list':
-                await listAccounts();
-                break;
-            case 'clear':
-                await ensureServerStopped();
-                await clearAccounts(rl);
-                break;
-            case 'verify':
-                await verifyAccounts();
-                break;
-            case 'help':
-                console.log('\nUsage:');
-                console.log('  node src/accounts-cli.js add     Add new account(s)');
-                console.log('  node src/accounts-cli.js list    List all accounts');
-                console.log('  node src/accounts-cli.js verify  Verify account tokens');
-                console.log('  node src/accounts-cli.js clear   Remove all accounts');
-                console.log('  node src/accounts-cli.js help    Show this help');
-                break;
-            case 'remove':
-                await ensureServerStopped();
-                await interactiveRemove(rl);
-                break;
-            default:
-                console.log(`Unknown command: ${command}`);
-                console.log('Run with "help" for usage information.');
+        const user = await selectUser(rl, userArg);
+
+        if (command === 'menu') {
+            while (true) {
+                console.log(`\n=== Account Manager (${user.username}) ===`);
+                console.log('1. List accounts');
+                console.log('2. Add account');
+                console.log('3. Remove account');
+                console.log('4. Verify accounts');
+                console.log('5. Switch user');
+                console.log('0. Exit');
+
+                const answer = await askQuestion(rl, '\nSelect option: ');
+
+                if (answer === '1') await listAccountsAction(user);
+                else if (answer === '2') await addAccount(rl, user);
+                else if (answer === '3') await removeAccount(rl, user);
+                else if (answer === '4') await verifyAccountsAction(user);
+                else if (answer === '5') {
+                    // Switch user - primitive way: restart main loop logic or just recurse?
+                    // Simpler: Just exit loop and let recursion handle it or restart process?
+                    // Let's just exit and tell them to restart for now to keep it simple, or re-select.
+                    console.log('Please restart tool to switch user.');
+                    process.exit(0);
+                }
+                else if (answer === '0') process.exit(0);
+            }
+        } else {
+            // One-off commands
+            switch (command) {
+                case 'add': await addAccount(rl, user); break;
+                case 'list': await listAccountsAction(user); break;
+                case 'remove': await removeAccount(rl, user); break;
+                case 'verify': await verifyAccountsAction(user); break;
+                default:
+                    console.log('Unknown command. Available: add, list, remove, verify');
+            }
         }
+
+    } catch (e) {
+        console.error('Error:', e.message);
     } finally {
         rl.close();
     }
 }
 
-main().catch(console.error);
+main();

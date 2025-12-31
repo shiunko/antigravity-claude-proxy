@@ -1,5 +1,7 @@
 # Antigravity Claude Proxy
 
+[中文](./README.zh.md)
+
 [![npm version](https://img.shields.io/npm/v/antigravity-claude-proxy.svg)](https://www.npmjs.com/package/antigravity-claude-proxy)
 [![npm downloads](https://img.shields.io/npm/dm/antigravity-claude-proxy.svg)](https://www.npmjs.com/package/antigravity-claude-proxy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -21,7 +23,7 @@ A proxy server that exposes an **Anthropic-compatible API** backed by **Antigrav
 ```
 
 1. Receives requests in **Anthropic Messages API format**
-2. Uses OAuth tokens from added Google accounts (or Antigravity's local database)
+2. Uses OAuth tokens from added Google accounts
 3. Transforms to **Google Generative AI format** with Cloud Code wrapping
 4. Sends to Antigravity's Cloud Code API
 5. Converts responses back to **Anthropic format** with full thinking/streaming support
@@ -29,7 +31,7 @@ A proxy server that exposes an **Anthropic-compatible API** backed by **Antigrav
 ## Prerequisites
 
 - **Node.js** 18 or later
-- **Antigravity** installed (for single-account mode) OR Google account(s) for multi-account mode
+- **Google account(s)** for authentication
 
 ---
 
@@ -60,14 +62,6 @@ npm start
 ## Quick Start
 
 ### 1. Add Account(s)
-
-You have two options:
-
-**Option A: Use Antigravity (Single Account)**
-
-If you have Antigravity installed and logged in, the proxy will automatically extract your token. No additional setup needed.
-
-**Option B: Add Google Accounts via OAuth (Recommended for Multi-Account)**
 
 Add one or more Google accounts for load balancing:
 
@@ -289,14 +283,6 @@ npm run test:caching       # Prompt caching
 ---
 
 ## Troubleshooting
-
-### "Could not extract token from Antigravity"
-
-If using single-account mode with Antigravity:
-1. Make sure Antigravity app is installed and running
-2. Ensure you're logged in to Antigravity
-
-Or add accounts via OAuth instead: `antigravity-claude-proxy accounts add`
 
 ### 401 Authentication Errors
 

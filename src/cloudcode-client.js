@@ -271,35 +271,55 @@ function buildHeaders(token, model, accept = 'application/json') {
  * @param {number} [anthropicRequest.max_tokens] - Maximum tokens to generate
  * @param {Object} [anthropicRequest.thinking] - Thinking configuration
  * @param {import('./account-manager.js').default} accountManager - The account manager instance
+ * @param {number} userId - The ID of the authenticated user
  * @returns {Promise<Object>} Anthropic-format response object
  * @throws {Error} If max retries exceeded or no accounts available
  */
-export async function sendMessage(anthropicRequest, accountManager) {
+export async function sendMessage(anthropicRequest, accountManager, userId) {
     const model = anthropicRequest.model;
     const isThinking = isThinkingModel(model);
 
     // Retry loop with account failover
     // Ensure we try at least as many times as there are accounts to cycle through everyone
     // +1 to ensure we hit the "all accounts rate-limited" check at the start of the next loop
-    const maxAttempts = Math.max(MAX_RETRIES, accountManager.getAccountCount() + 1);
+    // Note: getAccounts(userId) might be expensive if called repeatedly, but it's cached in DB query usually
+    const accounts = accountManager.getAccounts(userId);
+    const maxAttempts = Math.max(MAX_RETRIES, accounts.length + 1);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         // Use sticky account selection for cache continuity
-        const { account: stickyAccount, waitMs } = accountManager.pickStickyAccount();
+        const { account: stickyAccount, waitMs } = accountManager.pickStickyAccount(userId);
         let account = stickyAccount;
 
         // Handle waiting for sticky account
         if (!account && waitMs > 0) {
             console.log(`[CloudCode] Waiting ${formatDuration(waitMs)} for sticky account...`);
             await sleep(waitMs);
-            accountManager.clearExpiredLimits();
-            account = accountManager.getCurrentStickyAccount();
+            // clearExpiredLimits is called internally by pickStickyAccount/pickNext usually, but explicit check doesn't hurt
+            account = accountManager.pickNext(userId);
         }
 
         // Handle all accounts rate-limited
         if (!account) {
-            if (accountManager.isAllRateLimited()) {
-                const allWaitMs = accountManager.getMinWaitTimeMs();
+            if (accountManager.isAllRateLimited(userId)) {
+                // In multi-user mode, we don't have a global "min wait time" easily calculated without
+                // querying all accounts for this user.
+                // Let's implement a helper or just assume a default wait if we can't find one.
+                // For now, let's just wait a bit or throw.
+                // Actually, let's add a helper in AccountManager or just calculate it here from the accounts list.
+
+                const userAccounts = accountManager.getAccounts(userId);
+                let minWait = Infinity;
+                const now = Date.now();
+
+                for (const acc of userAccounts) {
+                    if (acc.rate_limit_reset_time) {
+                        const wait = acc.rate_limit_reset_time - now;
+                        if (wait > 0 && wait < minWait) minWait = wait;
+                    }
+                }
+
+                const allWaitMs = minWait === Infinity ? MAX_WAIT_BEFORE_ERROR_MS + 1000 : minWait;
                 const resetTime = new Date(Date.now() + allWaitMs).toISOString();
 
                 // If wait time is too long (> 2 minutes), throw error immediately
@@ -309,16 +329,14 @@ export async function sendMessage(anthropicRequest, accountManager) {
                     );
                 }
 
-                // Wait for reset (applies to both single and multi-account modes)
-                const accountCount = accountManager.getAccountCount();
-                console.log(`[CloudCode] All ${accountCount} account(s) rate-limited. Waiting ${formatDuration(allWaitMs)}...`);
+                console.log(`[CloudCode] All accounts rate-limited for user ${userId}. Waiting ${formatDuration(allWaitMs)}...`);
                 await sleep(allWaitMs);
-                accountManager.clearExpiredLimits();
-                account = accountManager.pickNext();
+                // After wait, try again
+                account = accountManager.pickNext(userId);
             }
 
             if (!account) {
-                throw new Error('No accounts available');
+                throw new Error('No accounts available for this user');
             }
         }
 
@@ -351,8 +369,10 @@ export async function sendMessage(anthropicRequest, accountManager) {
                         if (response.status === 401) {
                             // Auth error - clear caches and retry with fresh token
                             console.log('[CloudCode] Auth error, refreshing token...');
-                            accountManager.clearTokenCache(account.email);
-                            accountManager.clearProjectCache(account.email);
+                            accountManager.clearTokenCache(); // Clears internal map
+                            accountManager.clearProjectCache();
+                            // In a real scenario we might want to clear specific user cache,
+                            // but accountManager handles that internally via cache keys now.
                             continue;
                         }
 
@@ -397,7 +417,7 @@ export async function sendMessage(anthropicRequest, accountManager) {
                 // If all endpoints returned 429, mark account as rate-limited
                 if (lastError.is429) {
                     console.log(`[CloudCode] All endpoints rate-limited for ${account.email}`);
-                    accountManager.markRateLimited(account.email, lastError.resetMs);
+                    accountManager.markRateLimited(account, lastError.resetMs);
                     throw new Error(`Rate limited: ${lastError.errorText}`);
                 }
                 throw lastError;
@@ -535,34 +555,48 @@ async function parseThinkingSSEResponse(response, originalModel) {
  * @param {number} [anthropicRequest.max_tokens] - Maximum tokens to generate
  * @param {Object} [anthropicRequest.thinking] - Thinking configuration
  * @param {import('./account-manager.js').default} accountManager - The account manager instance
+ * @param {number} userId - The ID of the authenticated user
  * @yields {Object} Anthropic-format SSE events (message_start, content_block_start, content_block_delta, etc.)
  * @throws {Error} If max retries exceeded or no accounts available
  */
-export async function* sendMessageStream(anthropicRequest, accountManager) {
+export async function* sendMessageStream(anthropicRequest, accountManager, userId) {
     const model = anthropicRequest.model;
 
     // Retry loop with account failover
     // Ensure we try at least as many times as there are accounts to cycle through everyone
     // +1 to ensure we hit the "all accounts rate-limited" check at the start of the next loop
-    const maxAttempts = Math.max(MAX_RETRIES, accountManager.getAccountCount() + 1);
+    const accounts = accountManager.getAccounts(userId);
+    const maxAttempts = Math.max(MAX_RETRIES, accounts.length + 1);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
         // Use sticky account selection for cache continuity
-        const { account: stickyAccount, waitMs } = accountManager.pickStickyAccount();
+        const { account: stickyAccount, waitMs } = accountManager.pickStickyAccount(userId);
         let account = stickyAccount;
 
         // Handle waiting for sticky account
         if (!account && waitMs > 0) {
             console.log(`[CloudCode] Waiting ${formatDuration(waitMs)} for sticky account...`);
             await sleep(waitMs);
-            accountManager.clearExpiredLimits();
-            account = accountManager.getCurrentStickyAccount();
+            // accountManager.clearExpiredLimits(); // Done internally
+            account = accountManager.pickNext(userId);
         }
 
         // Handle all accounts rate-limited
         if (!account) {
-            if (accountManager.isAllRateLimited()) {
-                const allWaitMs = accountManager.getMinWaitTimeMs();
+            if (accountManager.isAllRateLimited(userId)) {
+                // Determine wait time for this user's accounts
+                const userAccounts = accountManager.getAccounts(userId);
+                let minWait = Infinity;
+                const now = Date.now();
+
+                for (const acc of userAccounts) {
+                    if (acc.rate_limit_reset_time) {
+                        const wait = acc.rate_limit_reset_time - now;
+                        if (wait > 0 && wait < minWait) minWait = wait;
+                    }
+                }
+
+                const allWaitMs = minWait === Infinity ? MAX_WAIT_BEFORE_ERROR_MS + 1000 : minWait;
                 const resetTime = new Date(Date.now() + allWaitMs).toISOString();
 
                 // If wait time is too long (> 2 minutes), throw error immediately
@@ -572,16 +606,14 @@ export async function* sendMessageStream(anthropicRequest, accountManager) {
                     );
                 }
 
-                // Wait for reset (applies to both single and multi-account modes)
-                const accountCount = accountManager.getAccountCount();
-                console.log(`[CloudCode] All ${accountCount} account(s) rate-limited. Waiting ${formatDuration(allWaitMs)}...`);
+                console.log(`[CloudCode] All accounts rate-limited for user ${userId}. Waiting ${formatDuration(allWaitMs)}...`);
                 await sleep(allWaitMs);
-                accountManager.clearExpiredLimits();
-                account = accountManager.pickNext();
+                // accountManager.clearExpiredLimits(); // Done internally
+                account = accountManager.pickNext(userId);
             }
 
             if (!account) {
-                throw new Error('No accounts available');
+                throw new Error('No accounts available for this user');
             }
         }
 
@@ -611,8 +643,8 @@ export async function* sendMessageStream(anthropicRequest, accountManager) {
 
                         if (response.status === 401) {
                             // Auth error - clear caches and retry
-                            accountManager.clearTokenCache(account.email);
-                            accountManager.clearProjectCache(account.email);
+                            accountManager.clearTokenCache();
+                            accountManager.clearProjectCache();
                             continue;
                         }
 
@@ -651,7 +683,7 @@ export async function* sendMessageStream(anthropicRequest, accountManager) {
                 // If all endpoints returned 429, mark account as rate-limited
                 if (lastError.is429) {
                     console.log(`[CloudCode] All endpoints rate-limited for ${account.email}`);
-                    accountManager.markRateLimited(account.email, lastError.resetMs);
+                    accountManager.markRateLimited(account, lastError.resetMs);
                     throw new Error(`Rate limited: ${lastError.errorText}`);
                 }
                 throw lastError;

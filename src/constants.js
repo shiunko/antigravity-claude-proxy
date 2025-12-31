@@ -3,27 +3,8 @@
  * Based on: https://github.com/NoeFabris/opencode-antigravity-auth
  */
 
-import { homedir, platform, arch } from 'os';
-import { join } from 'path';
+import { platform, arch } from 'os';
 
-/**
- * Get the Antigravity database path based on the current platform.
- * - macOS: ~/Library/Application Support/Antigravity/...
- * - Windows: ~/AppData/Roaming/Antigravity/...
- * - Linux/other: ~/.config/Antigravity/...
- * @returns {string} Full path to the Antigravity state database
- */
-function getAntigravityDbPath() {
-    const home = homedir();
-    switch (platform()) {
-        case 'darwin':
-            return join(home, 'Library/Application Support/Antigravity/User/globalStorage/state.vscdb');
-        case 'win32':
-            return join(home, 'AppData/Roaming/Antigravity/User/globalStorage/state.vscdb');
-        default: // linux, freebsd, etc.
-            return join(home, '.config/Antigravity/User/globalStorage/state.vscdb');
-    }
-}
 
 /**
  * Generate platform-specific User-Agent string.
@@ -64,18 +45,10 @@ export const REQUEST_BODY_LIMIT = '50mb';
 export const ANTIGRAVITY_AUTH_PORT = 9092;
 export const DEFAULT_PORT = 8080;
 
-// Multi-account configuration
-export const ACCOUNT_CONFIG_PATH = join(
-    homedir(),
-    '.config/antigravity-proxy/accounts.json'
-);
-
-// Antigravity app database path (for legacy single-account token extraction)
-// Uses platform-specific path detection
-export const ANTIGRAVITY_DB_PATH = getAntigravityDbPath();
-
 export const DEFAULT_COOLDOWN_MS = 60 * 1000; // 1 minute default cooldown
 export const MAX_RETRIES = 5; // Max retry attempts across accounts
+
+// Multi-account configuration
 export const MAX_ACCOUNTS = 10; // Maximum number of accounts allowed
 
 // Rate limit wait thresholds
@@ -152,8 +125,6 @@ export default {
     REQUEST_BODY_LIMIT,
     ANTIGRAVITY_AUTH_PORT,
     DEFAULT_PORT,
-    ACCOUNT_CONFIG_PATH,
-    ANTIGRAVITY_DB_PATH,
     DEFAULT_COOLDOWN_MS,
     MAX_RETRIES,
     MAX_ACCOUNTS,
