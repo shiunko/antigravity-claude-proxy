@@ -16,7 +16,8 @@ const args = process.argv.slice(2);
 const command = args[0];
 
 function showHelp() {
-  console.log(`
+    const port = process.env.PORT || 8080;
+    console.log(`
 antigravity-claude-proxy v${packageJson.version}
 
 Proxy server for using Antigravity's Claude models with Claude Code CLI.
@@ -25,7 +26,7 @@ USAGE:
   antigravity-claude-proxy <command> [options]
 
 COMMANDS:
-  start                 Start the proxy server (default port: 8080)
+  start                 Start the proxy server (default port: ${port})
   accounts              Manage Google accounts (interactive)
   accounts add          Add a new Google account via OAuth
   accounts list         List all configured accounts
@@ -38,7 +39,7 @@ OPTIONS:
   --version, -v         Show version number
 
 ENVIRONMENT:
-  PORT                  Server port (default: 8080)
+  PORT                  Server port (default: ${port})
 
 EXAMPLES:
   antigravity-claude-proxy start
@@ -50,7 +51,7 @@ CONFIGURATION:
   Claude Code CLI (~/.claude/settings.json):
     {
       "env": {
-        "ANTHROPIC_BASE_URL": "http://localhost:8080"
+        "ANTHROPIC_BASE_URL": "http://localhost:${port}"
       }
     }
 `);
