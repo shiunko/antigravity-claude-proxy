@@ -118,6 +118,28 @@ curl "http://localhost:8080/account-limits?format=table"
 
 ---
 
+## User Management
+
+The proxy supports multiple client users, each with their own API key. This is useful for sharing a single proxy instance among a team while tracking usage per user.
+
+```bash
+# Create a new user
+npm run users create <username>
+# Output:
+# Username: alice
+# API Key:  sk-proxy-... (Share this key with the user)
+
+# List all users
+npm run users list
+
+# Delete a user
+npm run users delete <username>
+```
+
+**Note:** The user should use their generated API Key as the `ANTHROPIC_API_KEY` in their [Claude Code configuration](#using-with-claude-code-cli).
+
+---
+
 ## Using with Claude Code CLI
 
 ### Configure Claude Code

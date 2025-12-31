@@ -118,6 +118,28 @@ curl "http://localhost:8080/account-limits?format=table"
 
 ---
 
+## 用户管理
+
+代理服务器支持多个客户端用户，每个用户都有自己的 API 密钥。这对于在团队中共享单个代理实例并跟踪每个用户的使用情况非常有用。
+
+```bash
+# 创建新用户
+npm run users create <username>
+# 输出:
+# Username: alice
+# API Key:  sk-proxy-... (与用户共享此密钥)
+
+# 列出所有用户
+npm run users list
+
+# 删除用户
+npm run users delete <username>
+```
+
+**注意：** 用户应在其 [Claude Code 配置](#在-claude-code-cli-中使用) 中使用生成的 API 密钥作为 `ANTHROPIC_API_KEY`。
+
+---
+
 ## 在 Claude Code CLI 中使用
 
 ### 配置 Claude Code

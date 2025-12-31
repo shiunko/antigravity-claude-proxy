@@ -19,6 +19,7 @@
     "accounts:list": "node src/accounts-cli.js list",
     "accounts:remove": "node src/accounts-cli.js remove",
     "accounts:verify": "node src/accounts-cli.js verify",
+    "users": "node src/user-cli.js",
     "test": "node tests/run-all.cjs",
     "test:signatures": "node tests/test-thinking-signatures.cjs",
     "test:multiturn": "node tests/test-multiturn-thinking-tools.cjs",
