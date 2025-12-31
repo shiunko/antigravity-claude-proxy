@@ -13,7 +13,7 @@ import {
     ANTIGRAVITY_HEADERS,
     OAUTH_CONFIG,
     OAUTH_REDIRECT_URI
-} from './constants.js';
+} from '../constants.js';
 
 /**
  * Generate PKCE code verifier and challenge

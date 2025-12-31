@@ -1,25 +1,41 @@
 /**
- * Express Server - Anthropic-compatible API
+ * Express Server - Unified Proxy
+ * Orchestrates Anthropic and OpenAI compatible APIs
  * Proxies to Google Cloud Code via Antigravity
- * Supports multi-account load balancing
  */
 
 import express from 'express';
 import cors from 'cors';
-import { sendMessage, sendMessageStream, listModels, getModelQuotas } from './cloudcode-client.js';
 import { REQUEST_BODY_LIMIT } from './constants.js';
-import { AccountManager } from './account-manager.js';
-import { ModelAggregator } from './model-aggregator.js';
-import { formatDuration } from './utils/helpers.js';
+import { AccountManager } from './services/account-manager.js';
+import { ModelAggregator } from './services/model-aggregator.js';
+import { Orchestrator } from './core/orchestrator.js';
+import { CloudCodeOutput } from './adapters/output/cloudcode-output.js';
+import { AnthropicInput } from './adapters/input/anthropic-input.js';
+import { OpenAIInput } from './adapters/input/openai-input.js';
 import { authenticateUser } from './middleware/auth.js';
+import { formatDuration } from './utils/helpers.js';
 
 const app = express();
 
+// 1. Initialize Services
 // Initialize account manager (will be fully initialized on first request or startup)
 const accountManager = new AccountManager();
 
 // Initialize model aggregator for virtual model resolution
 const modelAggregator = new ModelAggregator();
+
+// Initialize Orchestrator
+const orchestrator = new Orchestrator(modelAggregator);
+
+// 2. Initialize Adapters
+// Output Adapter: CloudCode (Google Gemini)
+const cloudCodeOutput = new CloudCodeOutput(accountManager);
+orchestrator.registerAdapter('cloudcode', cloudCodeOutput, true); // Set as default
+
+// Input Adapters
+const anthropicInput = new AnthropicInput(orchestrator);
+const openAIInput = new OpenAIInput(orchestrator);
 
 // Track initialization status
 let isInitialized = false;
@@ -51,63 +67,31 @@ async function ensureInitialized() {
     return initPromise;
 }
 
-// Middleware
+// 3. Middleware
 app.use(cors());
 app.use(express.json({ limit: REQUEST_BODY_LIMIT }));
-
-// Apply authentication middleware to all routes (except health which is handled inside authenticateUser)
-app.use(authenticateUser);
-
-/**
- * Parse error message to extract error type, status code, and user-friendly message
- */
-function parseError(error) {
-    let errorType = 'api_error';
-    let statusCode = 500;
-    let errorMessage = error.message;
-
-    if (error.message.includes('401') || error.message.includes('UNAUTHENTICATED') || error.message.includes('AUTH_INVALID')) {
-        errorType = 'authentication_error';
-        statusCode = 401;
-        errorMessage = 'Authentication failed. Make sure your account is properly configured and tokens are valid.';
-    } else if (error.message.includes('429') || error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('QUOTA_EXHAUSTED')) {
-        errorType = 'invalid_request_error';  // Use invalid_request_error to force client to purge/stop
-        statusCode = 400;  // Use 400 to ensure client does not retry (429 and 529 trigger retries)
-
-        // Try to extract the quota reset time from the error
-        const resetMatch = error.message.match(/quota will reset after (\d+h\d+m\d+s|\d+m\d+s|\d+s)/i);
-        const modelMatch = error.message.match(/"model":\s*"([^"]+)"/);
-        const model = modelMatch ? modelMatch[1] : 'the model';
-
-        if (resetMatch) {
-            errorMessage = `You have exhausted your capacity on ${model}. Quota will reset after ${resetMatch[1]}.`;
-        } else {
-            errorMessage = `You have exhausted your capacity on ${model}. Please wait for your quota to reset.`;
-        }
-    } else if (error.message.includes('invalid_request_error') || error.message.includes('INVALID_ARGUMENT')) {
-        errorType = 'invalid_request_error';
-        statusCode = 400;
-        const msgMatch = error.message.match(/"message":"([^"]+)"/);
-        if (msgMatch) errorMessage = msgMatch[1];
-    } else if (error.message.includes('All endpoints failed')) {
-        errorType = 'api_error';
-        statusCode = 503;
-        errorMessage = 'Unable to connect to Claude API. Check your upstream connection.';
-    } else if (error.message.includes('PERMISSION_DENIED')) {
-        errorType = 'permission_error';
-        statusCode = 403;
-        errorMessage = 'Permission denied. Check your project access.';
-    }
-
-    return { errorType, statusCode, errorMessage };
-}
 
 // Request logging middleware
 app.use((req, res, next) => {
     const userEmail = req.user ? req.user.email : 'anonymous';
-    console.log(`[${new Date().toISOString()}] ${userEmail} - ${req.method} ${req.path}`);
+    // Don't log health checks to reduce noise if needed, but useful for debug
+    if (req.path !== '/health') {
+        console.log(`[${new Date().toISOString()}] ${userEmail} - ${req.method} ${req.path}`);
+    }
     next();
 });
+
+// Apply authentication middleware to all routes (except health which checks internally if needed, but here we apply globally)
+// Note: authenticateUser skips /health and /
+app.use(authenticateUser);
+
+// 4. Register Input Routes
+// Registers /v1/messages
+anthropicInput.register(app);
+// Registers /v1/chat/completions
+openAIInput.register(app);
+
+// 5. Infrastructure & Helper Routes
 
 /**
  * Health check endpoint
@@ -124,6 +108,27 @@ app.get('/health', async (req, res) => {
             status: 'error',
             error: error.message,
             timestamp: new Date().toISOString()
+        });
+    }
+});
+
+/**
+ * List models endpoint (OpenAI/Anthropic compatible)
+ * Both clients often use /v1/models
+ */
+app.get('/v1/models', async (req, res) => {
+    try {
+        await ensureInitialized();
+        const models = await cloudCodeOutput.listModels(req.user.id);
+        res.json(models);
+    } catch (error) {
+        console.error('[API] Error listing models:', error);
+        res.status(500).json({
+            object: 'error',
+            error: {
+                type: 'api_error',
+                message: error.message
+            }
         });
     }
 });
@@ -161,7 +166,7 @@ app.get('/account-limits', async (req, res) => {
 
                 try {
                     const token = await accountManager.getTokenForAccount(account);
-                    const quotas = await getModelQuotas(token);
+                    const quotas = await cloudCodeOutput.getModelQuotas(token);
 
                     return {
                         email: account.email,
@@ -328,226 +333,6 @@ app.get('/account-limits', async (req, res) => {
             status: 'error',
             error: error.message
         });
-    }
-});
-
-/**
- * List models endpoint (OpenAI-compatible format)
- */
-app.get('/v1/models', async (req, res) => {
-    try {
-        await ensureInitialized();
-        const account = accountManager.pickNext(req.user.id);
-        if (!account) {
-            return res.status(503).json({
-                type: 'error',
-                error: {
-                    type: 'api_error',
-                    message: 'No accounts available for your user. Please add accounts or wait for rate limits to reset.'
-                }
-            });
-        }
-        const token = await accountManager.getTokenForAccount(account);
-        const models = await listModels(token);
-        res.json(models);
-    } catch (error) {
-        console.error('[API] Error listing models:', error);
-        res.status(500).json({
-            type: 'error',
-            error: {
-                type: 'api_error',
-                message: error.message
-            }
-        });
-    }
-});
-
-/**
- * Count tokens endpoint (not supported)
- */
-app.post('/v1/messages/count_tokens', (req, res) => {
-    res.status(501).json({
-        type: 'error',
-        error: {
-            type: 'not_implemented',
-            message: 'Token counting is not implemented. Use /v1/messages with max_tokens or configure your client to skip token counting.'
-        }
-    });
-});
-
-/**
- * Main messages endpoint - Anthropic Messages API compatible
- */
-app.post('/v1/messages', async (req, res) => {
-    try {
-        // Ensure account manager is initialized
-        await ensureInitialized();
-
-        const {
-            model,
-            messages,
-            max_tokens,
-            stream,
-            system,
-            tools,
-            tool_choice,
-            thinking,
-            top_p,
-            top_k,
-            temperature
-        } = req.body;
-
-        // Validate required fields
-        if (!messages || !Array.isArray(messages)) {
-            return res.status(400).json({
-                type: 'error',
-                error: {
-                    type: 'invalid_request_error',
-                    message: 'messages is required and must be an array'
-                }
-            });
-        }
-
-        const requestedModel = model || 'claude-3-5-sonnet-20241022';
-
-        // Resolve virtual model to candidate list
-        const candidateModels = modelAggregator.resolve(req.user.id, requestedModel);
-        const isVirtualModel = candidateModels.length > 1 || candidateModels[0] !== requestedModel;
-
-        if (isVirtualModel) {
-            console.log(`[Aggregator] User ${req.user.username} requesting '${requestedModel}' -> candidates: [${candidateModels.join(', ')}]`);
-        }
-
-        let lastError = null;
-        let success = false;
-
-        // Try each candidate model
-        for (const candidateModel of candidateModels) {
-            // Build the request object with current candidate model
-            const request = {
-                model: candidateModel,
-                messages,
-                max_tokens: max_tokens || 4096,
-                stream,
-                system,
-                tools,
-                tool_choice,
-                thinking,
-                top_p,
-                top_k,
-                temperature
-            };
-
-            if (isVirtualModel) {
-                console.log(`[Aggregator] Trying model '${candidateModel}'...`);
-            } else {
-                console.log(`[API] Request from ${req.user.email} for model: ${request.model}, stream: ${!!stream}`);
-            }
-
-            try {
-                if (stream) {
-                    // Handle streaming response
-                    res.setHeader('Content-Type', 'text/event-stream');
-                    res.setHeader('Cache-Control', 'no-cache');
-                    res.setHeader('Connection', 'keep-alive');
-                    res.setHeader('X-Accel-Buffering', 'no');
-
-                    // Flush headers immediately to start the stream
-                    if (res.flushHeaders) res.flushHeaders();
-
-                    try {
-                        // Use the streaming generator with account manager and user ID
-                        for await (const event of sendMessageStream(request, accountManager, req.user.id)) {
-                            res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
-                            // Flush after each event for real-time streaming
-                            if (res.flush) res.flush();
-                        }
-                        res.end();
-                        success = true;
-                        break;
-
-                    } catch (streamError) {
-                        // Check if this is a rate limit error that should trigger failover
-                        if (modelAggregator.isRateLimitError(streamError) && candidateModels.indexOf(candidateModel) < candidateModels.length - 1) {
-                            console.warn(`[Aggregator] Model '${candidateModel}' rate limited. Failover to next candidate...`);
-                            lastError = streamError;
-                            // Note: For streaming, we may have already sent headers
-                            // If headers were sent, we can't failover - need to report error via SSE
-                            if (res.headersSent) {
-                                // Can't failover after streaming has started
-                                const { errorType, errorMessage } = parseError(streamError);
-                                res.write(`event: error\ndata: ${JSON.stringify({
-                                    type: 'error',
-                                    error: { type: errorType, message: errorMessage }
-                                })}\n\n`);
-                                res.end();
-                                return;
-                            }
-                            continue;
-                        }
-
-                        console.error('[API] Stream error:', streamError);
-                        const { errorType, errorMessage } = parseError(streamError);
-                        res.write(`event: error\ndata: ${JSON.stringify({
-                            type: 'error',
-                            error: { type: errorType, message: errorMessage }
-                        })}\n\n`);
-                        res.end();
-                        return;
-                    }
-
-                } else {
-                    // Handle non-streaming response
-                    const response = await sendMessage(request, accountManager, req.user.id);
-                    res.json(response);
-                    success = true;
-                    break;
-                }
-
-            } catch (error) {
-                lastError = error;
-
-                // Check if this is a rate limit error that should trigger failover
-                if (modelAggregator.isRateLimitError(error) && candidateModels.indexOf(candidateModel) < candidateModels.length - 1) {
-                    console.warn(`[Aggregator] Model '${candidateModel}' rate limited. Failover to next candidate...`);
-                    continue;
-                }
-
-                // For other errors, throw immediately
-                throw error;
-            }
-        }
-
-        // If all candidates failed
-        if (!success && lastError) {
-            console.error(`[Aggregator] All candidates for '${requestedModel}' failed.`);
-            throw lastError;
-        }
-
-    } catch (error) {
-        console.error('[API] Error:', error);
-
-        const { errorType, statusCode, errorMessage } = parseError(error);
-
-        console.log(`[API] Returning error response: ${statusCode} ${errorType} - ${errorMessage}`);
-
-        // Check if headers have already been sent (for streaming that failed mid-way)
-        if (res.headersSent) {
-            console.log('[API] Headers already sent, writing error as SSE event');
-            res.write(`event: error\ndata: ${JSON.stringify({
-                type: 'error',
-                error: { type: errorType, message: errorMessage }
-            })}\n\n`);
-            res.end();
-        } else {
-            res.status(statusCode).json({
-                type: 'error',
-                error: {
-                    type: errorType,
-                    message: errorMessage
-                }
-            });
-        }
     }
 });
 

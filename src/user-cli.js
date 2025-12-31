@@ -21,7 +21,7 @@ import {
     listModelGroups,
     deleteModelGroup,
     removeModelFromGroup
-} from './db/proxy-db.js';
+} from './services/database.js';
 
 const command = process.argv[2];
 const args = process.argv.slice(3);

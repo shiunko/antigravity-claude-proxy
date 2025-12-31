@@ -3,7 +3,7 @@
  * Converts Anthropic message content to Google Generative AI parts format
  */
 
-import { MIN_SIGNATURE_LENGTH, GEMINI_SKIP_SIGNATURE } from '../constants.js';
+import { MIN_SIGNATURE_LENGTH, GEMINI_SKIP_SIGNATURE } from '../../constants.js';
 import { getCachedSignature } from './signature-cache.js';
 
 /**

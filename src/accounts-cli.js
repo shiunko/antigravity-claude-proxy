@@ -24,7 +24,7 @@ import {
     completeOAuthFlow,
     refreshAccessToken,
     getUserEmail
-} from './oauth.js';
+} from './services/auth.js';
 import {
     listUsers,
     createUser,
@@ -32,7 +32,7 @@ import {
     addAccount as addAccountToDb,
     deleteAccount as deleteAccountFromDb,
     updateAccount
-} from './db/proxy-db.js';
+} from './services/database.js';
 
 // --- UI Helpers ---
 

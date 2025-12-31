@@ -36,32 +36,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture
 
 **Overview**
-This is a proxy server that exposes an Anthropic-compatible API but forwards requests to Antigravity's Cloud Code service (Gemini models). It translates between Anthropic Messages API format and Google Generative AI format.
+This is a unified proxy server that exposes both **Anthropic-compatible** (`/v1/messages`) and **OpenAI-compatible** (`/v1/chat/completions`) APIs. It orchestrates requests through a central core and adapts them for Antigravity's Cloud Code service (Gemini models).
 
 **Request Flow**
-1. **Claude Code CLI** sends Anthropic-formatted request to `src/server.js`
-2. **Request Converter** (`src/format/request-converter.js`) transforms it to Google format
-3. **Account Manager** (`src/account-manager.js`) selects an account (sticky session for caching)
-4. **CloudCode Client** (`src/cloudcode-client.js`) sends request to Antigravity API
-5. **Response Converter** (`src/format/response-converter.js`) transforms response back to Anthropic format (handling thinking blocks and streams)
+1. **Client** (Claude Code, Cursor, etc.) sends request to `src/server.js`
+2. **Input Adapter** (`src/adapters/input/`) normalizes the request to a standard internal format
+3. **Orchestrator** (`src/core/orchestrator.js`) routes the message, handling context management
+4. **Account Manager** (`src/services/account-manager.js`) selects an upstream account (sticky sessions)
+5. **Output Adapter** (`src/adapters/output/cloudcode-output.js`) converts to Google format and sends to Antigravity
+6. **Response** is converted back to the client's expected format (handling streams and thinking blocks)
 
 **Key Components**
-- **`src/server.js`**: Express server handling `/v1/messages`, `/health`, etc.
-- **`src/account-manager.js`**: Manages multiple accounts, handles rate limits (429), and implements sticky sessions for prompt caching.
-- **`src/model-aggregator.js`**: Resolves virtual model aliases to actual models with failover support.
-- **`src/db/proxy-db.js`**: SQLite database interface for storing users, accounts, and model groups.
-- **`src/format/`**:
-  - `thinking-utils.js`: Handles "thinking" blocks, signature validation, and recovery from corrupted states.
-  - `signature-cache.js`: Caches signatures to restore them when stripped by clients.
+- **`src/server.js`**: Express server entry point, wiring up adapters and middleware.
+- **`src/core/orchestrator.js`**: Central hub that routes messages between inputs and outputs.
+- **`src/adapters/`**:
+  - **Input**: `anthropic-input.js`, `openai-input.js`
+  - **Output**: `cloudcode-output.js` (Google Gemini)
+- **`src/services/`**:
+  - `account-manager.js`: Manages account pool, rate limits, and session stickiness.
+  - `model-aggregator.js`: Resolves virtual model aliases with failover.
+  - `database.js`: SQLite interface for persistence.
+- **`src/utils/converters/`**:
+  - `thinking-utils.js`: Handles thinking blocks and signature validation.
+  - `signature-cache.js`: Caches signatures to restore them when stripped.
   - `schema-sanitizer.js`: Cleans JSON schemas for Gemini compatibility.
-- **`src/oauth.js`**: Handles Google OAuth flows.
-- **`src/constants.js`**: Centralized configuration (endpoints, models, headers).
 
 **Data Flow Concepts**
-- **Prompt Caching**: Uses a stable session ID (hash of first user message) to keep requests on the same account.
-- **Thinking Blocks**: Gemini's `thought` parts are converted to Anthropic's `thinking` blocks. Signatures are preserved/cached to satisfy API requirements.
-- **Model Families**: `claude-*` models use `signature`; `gemini-*` models use `thoughtSignature`.
-- **Model Aggregation**: Virtual model aliases can map to multiple actual models. Supports `priority` (failover in order) and `random` (load balancing) strategies.
+- **Unified Interface**: Clients see standard Anthropic or OpenAI APIs; the proxy handles translation.
+- **Prompt Caching**: Uses a stable session ID to keep requests on the same upstream account.
+- **Thinking Blocks**: Gemini's `thought` parts are preserved and converted to Anthropic `thinking` blocks.
+- **Model Aggregation**: Virtual aliases (e.g., `gemini-2-pro`) map to actual models with `priority` or `random` failover.
 
 ## Code Style & Conventions
 

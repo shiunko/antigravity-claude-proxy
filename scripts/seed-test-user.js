@@ -1,4 +1,4 @@
-import { createUser, getUserByName, getUserByApiKey } from '../src/db/proxy-db.js';
+import { createUser, getUserByName, getUserByApiKey } from '../src/services/database.js';
 
 console.log('Checking for test user configuration...');
 

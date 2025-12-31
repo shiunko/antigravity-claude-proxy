@@ -3,14 +3,14 @@
  * Manages multiple Antigravity accounts per user with sticky selection,
  * automatic failover, and smart cooldown for rate-limited accounts.
  *
- * Refactored to use SQLite (proxy-db.js) for multi-tenancy.
+ * Refactored to use SQLite (database.js) for multi-tenancy.
  */
 
 import {
     getAccountsForUser,
     updateAccount,
     clearExpiredRateLimits
-} from './db/proxy-db.js';
+} from './database.js';
 
 import {
     DEFAULT_COOLDOWN_MS,
@@ -19,10 +19,10 @@ import {
     ANTIGRAVITY_HEADERS,
     DEFAULT_PROJECT_ID,
     MAX_WAIT_BEFORE_ERROR_MS
-} from './constants.js';
+} from '../constants.js';
 
-import { refreshAccessToken } from './oauth.js';
-import { formatDuration } from './utils/helpers.js';
+import { refreshAccessToken } from './auth.js';
+import { formatDuration } from '../utils/helpers.js';
 
 export class AccountManager {
     // In-memory caches
@@ -190,7 +190,7 @@ export class AccountManager {
     getStatus() {
         // TODO: This currently doesn't have a direct DB equivalent function to "get all accounts for all users"
         // But for backward compatibility with server.js health check, we might want to return something.
-        // For now, return a placeholder or implement getAllAccounts in proxy-db.js if needed.
+        // For now, return a placeholder or implement getAllAccounts in database.js if needed.
         // Since we changed to SQLite, let's just return a summary.
         return {
             summary: "Multi-user mode active (SQLite)",
@@ -237,7 +237,7 @@ export class AccountManager {
             }
         } else if (account.source === 'manual' && account.access_token) {
              // For manual accounts, we stored apiKey in access_token column or similar?
-             // Checking proxy-db schema: users have api_key, upstream_accounts have access_token.
+             // Checking database.js schema: users have api_key, upstream_accounts have access_token.
              // If source is manual, access_token likely holds the key.
              token = account.access_token;
         } else {

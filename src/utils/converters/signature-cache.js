@@ -7,7 +7,7 @@
  * so they can be restored in subsequent requests.
  */
 
-import { GEMINI_SIGNATURE_CACHE_TTL_MS } from '../constants.js';
+import { GEMINI_SIGNATURE_CACHE_TTL_MS } from '../../constants.js';
 
 const signatureCache = new Map();
 

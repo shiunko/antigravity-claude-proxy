@@ -3,7 +3,7 @@
  * Validates API keys and injects user context into the request.
  */
 
-import { getUserByApiKey } from '../db/proxy-db.js';
+import { getUserByApiKey } from '../services/database.js';
 
 export const authenticateUser = (req, res, next) => {
     // Skip auth for health checks and non-protected endpoints

@@ -3,7 +3,7 @@
  * Handles thinking block processing, validation, and filtering
  */
 
-import { MIN_SIGNATURE_LENGTH } from '../constants.js';
+import { MIN_SIGNATURE_LENGTH } from '../../constants.js';
 
 /**
  * Check if a part is a thinking block

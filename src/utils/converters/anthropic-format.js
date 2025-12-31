@@ -4,7 +4,7 @@
  */
 
 import crypto from 'crypto';
-import { MIN_SIGNATURE_LENGTH } from '../constants.js';
+import { MIN_SIGNATURE_LENGTH } from '../../constants.js';
 import { cacheSignature } from './signature-cache.js';
 
 /**

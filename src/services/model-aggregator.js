@@ -3,7 +3,7 @@
  * Resolves virtual model aliases to actual model candidates with failover support.
  */
 
-import { getModelGroup } from './db/proxy-db.js';
+import { getModelGroup } from './database.js';
 
 export class ModelAggregator {
     /**
