@@ -12,6 +12,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - Add: `npm run accounts:add`
   - List: `npm run accounts:list`
   - Verify: `npm run accounts:verify`
+- **Users**:
+  - Create: `npm run users create <username>`
+  - List: `npm run users list`
+  - Delete: `npm run users delete <username>`
 - **Testing**:
   - **Prerequisite**: Server must be running (`npm start`) in a separate terminal.
   - Run all: `npm test`
