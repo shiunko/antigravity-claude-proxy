@@ -106,6 +106,16 @@ npm start
 
 服务器默认运行在 `http://localhost:8080`。
 
+要在不同端口（例如 3000）上运行：
+
+```bash
+# 使用环境变量
+PORT=3000 antigravity-claude-proxy start
+
+# 或者使用 npm
+PORT=3000 npm start
+```
+
 ### 3. 验证是否工作
 
 ```bash

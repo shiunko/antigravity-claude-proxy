@@ -106,6 +106,16 @@ npm start
 
 The server runs on `http://localhost:8080` by default.
 
+To run on a different port (e.g., 3000):
+
+```bash
+# Using env var
+PORT=3000 antigravity-claude-proxy start
+
+# Or with npm
+PORT=3000 npm start
+```
+
 ### 3. Verify It's Working
 
 ```bash
