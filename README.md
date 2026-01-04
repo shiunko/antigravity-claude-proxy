@@ -106,17 +106,28 @@ npm start
 
 The server runs on `http://localhost:8080` by default.
 
-To run on a different port (e.g., 3000):
+### 3. Start the Web Admin Dashboard (Optional but Recommended)
+
+The project now includes a full-featured web dashboard for managing accounts, users, and model groups.
 
 ```bash
-# Using env var
-PORT=3000 antigravity-claude-proxy start
+# Install admin dependencies (first time only)
+npm run admin:install
 
-# Or with npm
-PORT=3000 npm start
+# Start the admin UI
+npm run admin
 ```
 
-### 3. Verify It's Working
+The admin dashboard runs on `http://localhost:3000` by default.
+
+Features:
+- **Visual Account Management**: Add/remove Google accounts via OAuth or manual entry
+- **Quota Tracking**: Real-time view of remaining quotas and reset times
+- **Model Groups**: Create and manage virtual model aliases with drag-and-drop ordering
+- **User Management**: Manage API keys and user access
+- **Stats Overview**: Monitor proxy health and usage
+
+### 4. Verify It's Working
 
 ```bash
 # Health check
@@ -128,7 +139,32 @@ curl "http://localhost:8080/account-limits?format=table"
 
 ---
 
-## User Management
+## Admin Dashboard
+
+The new Admin Dashboard (`http://localhost:3000`) provides a graphical interface for all management tasks.
+
+![Admin Dashboard](images/admin-dashboard-preview.png)
+
+### Key Features
+
+1.  **Account Management**
+    - Add multiple Google accounts for load balancing
+    - View health status (Active/Rate Limited/Invalid)
+    - See exact quota usage per model
+    - Re-authenticate invalid accounts
+
+2.  **Model Groups (Virtual Aliases)**
+    - Create virtual models (e.g., `company-pro`)
+    - Define failover strategies (Priority vs Random)
+    - Drag-and-drop to reorder model priority
+    - Test model groups directly from the UI
+
+3.  **User Management**
+    - Create and manage team members
+    - Generate and revoke API keys
+    - Grant admin privileges
+
+## User Management (CLI)
 
 The proxy supports multiple client users, each with their own API key. This is useful for sharing a single proxy instance among a team while tracking usage per user.
 
@@ -338,6 +374,13 @@ curl "http://localhost:8080/account-limits?format=table"
 ```
 
 ---
+
+## Data Persistence
+
+All configuration data (users, accounts, model groups) is stored in a local SQLite database located at `data/proxy.db`.
+
+-   **Backup**: You can back up the `data/` directory to preserve your configuration.
+-   **Migration**: If you move the proxy to a new machine, copy the `data/` folder to keep your accounts and users.
 
 ## API Endpoints
 
