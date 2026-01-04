@@ -2,6 +2,85 @@
  * Main Application for Antigravity Proxy Admin
  */
 
+document.addEventListener('alpine:init', () => {
+  Alpine.store('shared', {
+    accounts: [],
+    accountLimits: {},
+    modelGroups: [],
+    users: [],
+
+    lastFetch: {
+      accounts: 0,
+      limits: 0,
+      modelGroups: 0,
+      users: 0
+    },
+
+    // Cache duration in milliseconds (e.g., 5 seconds)
+    // Short enough to feel responsive, long enough to prevent duplicate calls on tab switch
+    CACHE_DURATION: 5000,
+
+    async loadAccounts(force = false) {
+      const now = Date.now();
+      if (!force && this.accounts.length > 0 && (now - this.lastFetch.accounts < this.CACHE_DURATION)) {
+        return this.accounts;
+      }
+
+      const accounts = await window.api.getAccounts();
+      this.accounts = accounts;
+      this.lastFetch.accounts = now;
+      return accounts;
+    },
+
+    async loadAccountLimits(force = false) {
+      const now = Date.now();
+      if (!force && Object.keys(this.accountLimits).length > 0 && (now - this.lastFetch.limits < this.CACHE_DURATION)) {
+        return this.accountLimits;
+      }
+
+      try {
+        const limitsData = await window.api.getAccountLimits();
+        const limitsMap = {};
+        if (limitsData && limitsData.accounts) {
+          limitsData.accounts.forEach(acc => {
+            limitsMap[acc.email] = acc;
+          });
+        }
+        this.accountLimits = limitsMap;
+        this.lastFetch.limits = now;
+        return this.accountLimits;
+      } catch (error) {
+        console.error('Failed to load limits:', error);
+        return {}; // Return empty object on error to avoid breaking UI
+      }
+    },
+
+    async loadModelGroups(force = false) {
+      const now = Date.now();
+      if (!force && this.modelGroups.length > 0 && (now - this.lastFetch.modelGroups < this.CACHE_DURATION)) {
+        return this.modelGroups;
+      }
+
+      const groups = await window.api.getModelGroups();
+      this.modelGroups = groups;
+      this.lastFetch.modelGroups = now;
+      return groups;
+    },
+
+    async loadUsers(force = false) {
+      const now = Date.now();
+      if (!force && this.users.length > 0 && (now - this.lastFetch.users < this.CACHE_DURATION)) {
+        return this.users;
+      }
+
+      const users = await window.api.getUsers();
+      this.users = users;
+      this.lastFetch.users = now;
+      return users;
+    }
+  });
+});
+
 // Main app component
 function app() {
   return {
@@ -140,15 +219,17 @@ function dashboardComponent() {
 
     async loadData() {
       try {
-        // Load accounts for stats
-        const accounts = await window.api.getAccounts();
+        // Load accounts for stats using shared store
+        const shared = Alpine.store('shared');
+        const accounts = await shared.loadAccounts();
+
         this.stats.totalAccounts = accounts.length;
         this.stats.activeAccounts = accounts.filter(a => !a.is_invalid && !a.is_rate_limited).length;
         this.stats.rateLimitedAccounts = accounts.filter(a => a.is_rate_limited).length;
         this.stats.invalidAccounts = accounts.filter(a => a.is_invalid).length;
 
-        // Load model groups
-        this.modelGroups = await window.api.getModelGroups();
+        // Load model groups using shared store
+        this.modelGroups = await shared.loadModelGroups();
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
       }
@@ -200,22 +281,16 @@ function accountsComponent() {
       });
     },
 
-    async refreshAccounts() {
+    async refreshAccounts(force = false) {
       try {
-        const [accounts, limitsData] = await Promise.all([
-          window.api.getAccounts(),
-          window.api.getAccountLimits().catch(e => ({ accounts: [] })) // Handle error gracefully
+        const shared = Alpine.store('shared');
+        const [accounts, accountLimits] = await Promise.all([
+          shared.loadAccounts(force),
+          shared.loadAccountLimits(force)
         ]);
 
         this.accounts = accounts;
-
-        // Transform limits array into a map keyed by email for easy lookup
-        this.accountLimits = {};
-        if (limitsData && limitsData.accounts) {
-          limitsData.accounts.forEach(acc => {
-            this.accountLimits[acc.email] = acc;
-          });
-        }
+        this.accountLimits = accountLimits;
       } catch (error) {
         console.error('Failed to load accounts:', error);
       }
@@ -268,7 +343,7 @@ function accountsComponent() {
                 clearInterval(pollInterval);
                 this.oauthLoading = false;
                 if (authWindow && !authWindow.closed) authWindow.close();
-                await this.refreshAccounts();
+                await this.refreshAccounts(true);
                 this.showAddModal = false;
                 this.showToast('账户添加成功', 'success');
               } else if (status === 'error') {
@@ -310,7 +385,7 @@ function accountsComponent() {
         );
         this.showAddModal = false;
         this.manualForm = { email: '', refresh_token: '', project_id: '' };
-        await this.refreshAccounts();
+        await this.refreshAccounts(true);
       } catch (error) {
         this.addError = error.message || '添加失败';
       } finally {
@@ -321,7 +396,7 @@ function accountsComponent() {
     async verifyAccount(account) {
       try {
         await window.api.verifyAccount(account.id);
-        await this.refreshAccounts();
+        await this.refreshAccounts(true);
         this.showToast('账户验证成功', 'success');
       } catch (error) {
         this.showToast(error.message || '验证失败', 'error');
@@ -335,7 +410,7 @@ function accountsComponent() {
 
       try {
         await window.api.deleteAccount(account.id);
-        await this.refreshAccounts();
+        await this.refreshAccounts(true);
         this.showToast('账户已删除', 'success');
       } catch (error) {
         this.showToast(error.message || '删除失败', 'error');
@@ -397,12 +472,13 @@ function groupsComponent() {
 
     async loadAvailableModels() {
       try {
-        const limitsData = await window.api.getAccountLimits();
+        const shared = Alpine.store('shared');
+        const accountLimits = await shared.loadAccountLimits();
 
         // Extract unique models from limits data
         const models = new Set();
-        if (limitsData && limitsData.accounts) {
-          limitsData.accounts.forEach(acc => {
+        if (accountLimits) {
+          Object.values(accountLimits).forEach(acc => {
             if (acc.limits) {
               Object.keys(acc.limits).forEach(model => models.add(model));
             }
@@ -434,9 +510,10 @@ function groupsComponent() {
       }
     },
 
-    async loadGroups() {
+    async loadGroups(force = false) {
       try {
-        this.groups = await window.api.getModelGroups();
+        const shared = Alpine.store('shared');
+        this.groups = await shared.loadModelGroups(force);
       } catch (error) {
         console.error('Failed to load groups:', error);
       }
@@ -452,7 +529,7 @@ function groupsComponent() {
         );
         this.showCreateModal = false;
         this.createForm = { alias: '', strategy: 'priority' };
-        await this.loadGroups();
+        await this.loadGroups(true);
       } catch (error) {
         this.createError = error.message || '创建失败';
       }
@@ -465,7 +542,7 @@ function groupsComponent() {
 
       try {
         await window.api.deleteModelGroup(group.id);
-        await this.loadGroups();
+        await this.loadGroups(true);
       } catch (error) {
         console.error('Failed to delete group:', error);
       }
@@ -493,7 +570,7 @@ function groupsComponent() {
           this.addModelModal.orderIndex
         );
         this.addModelModal.show = false;
-        await this.loadGroups();
+        await this.loadGroups(true);
       } catch (error) {
         console.error('Failed to add model:', error);
       }
@@ -502,7 +579,7 @@ function groupsComponent() {
     async removeModelFromGroup(group, modelName) {
       try {
         await window.api.removeModelFromGroup(group.id, modelName);
-        await this.loadGroups();
+        await this.loadGroups(true);
       } catch (error) {
         console.error('Failed to remove model:', error);
       }
@@ -530,9 +607,10 @@ function usersComponent() {
       });
     },
 
-    async loadUsers() {
+    async loadUsers(force = false) {
       try {
-        this.users = await window.api.getUsers();
+        const shared = Alpine.store('shared');
+        this.users = await shared.loadUsers(force);
       } catch (error) {
         console.error('Failed to load users:', error);
       }
@@ -549,7 +627,7 @@ function usersComponent() {
         );
         this.showCreateModal = false;
         this.createForm = { username: '', password: '', is_admin: false };
-        await this.loadUsers();
+        await this.loadUsers(true);
       } catch (error) {
         this.createError = error.message || '创建失败';
       }
@@ -562,7 +640,7 @@ function usersComponent() {
 
       try {
         await window.api.deleteUser(user.id);
-        await this.loadUsers();
+        await this.loadUsers(true);
       } catch (error) {
         console.error('Failed to delete user:', error);
       }
@@ -575,7 +653,7 @@ function usersComponent() {
 
       try {
         await window.api.regenerateUserKey(user.id);
-        await this.loadUsers();
+        await this.loadUsers(true);
       } catch (error) {
         console.error('Failed to regenerate key:', error);
       }
