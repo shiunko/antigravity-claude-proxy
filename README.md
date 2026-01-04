@@ -106,6 +106,16 @@ npm start
 
 The server runs on `http://localhost:8080` by default.
 
+To run on a different port (e.g., 3000):
+
+```bash
+# Using env var
+PORT=3000 antigravity-claude-proxy start
+
+# Or with npm
+PORT=3000 npm start
+```
+
 ### 3. Start the Web Admin Dashboard (Optional but Recommended)
 
 The project now includes a full-featured web dashboard for managing accounts, users, and model groups.
@@ -142,8 +152,6 @@ curl "http://localhost:8080/account-limits?format=table"
 ## Admin Dashboard
 
 The new Admin Dashboard (`http://localhost:3000`) provides a graphical interface for all management tasks.
-
-![Admin Dashboard](images/admin-dashboard-preview.png)
 
 ### Key Features
 

@@ -106,6 +106,16 @@ npm start
 
 服务器默认运行在 `http://localhost:8080`。
 
+要在不同端口（例如 3000）上运行：
+
+```bash
+# 使用环境变量
+PORT=3000 antigravity-claude-proxy start
+
+# 或者使用 npm
+PORT=3000 npm start
+```
+
 ### 3. 启动 Web 管理面板（可选但推荐）
 
 本项目现在包含一个功能齐全的 Web 管理面板，用于管理账号、用户和模型组。
@@ -142,8 +152,6 @@ curl "http://localhost:8080/account-limits?format=table"
 ## Web 管理面板
 
 新的管理面板 (`http://localhost:3000`) 为所有管理任务提供了图形化界面。
-
-![Admin Dashboard](images/admin-dashboard-preview.png)
 
 ### 主要功能
 
