@@ -131,6 +131,11 @@ function dashboardComponent() {
 
     async init() {
       await this.loadData();
+      window.addEventListener('page-changed', (e) => {
+        if (e.detail === 'dashboard') {
+          this.loadData();
+        }
+      });
     },
 
     async loadData() {
@@ -189,6 +194,11 @@ function accountsComponent() {
 
     async init() {
       await this.refreshAccounts();
+      window.addEventListener('page-changed', (e) => {
+        if (e.detail === 'accounts') {
+          this.refreshAccounts();
+        }
+      });
     },
 
     async refreshAccounts() {
@@ -382,6 +392,12 @@ function groupsComponent() {
         this.loadGroups(),
         this.loadAvailableModels()
       ]);
+      window.addEventListener('page-changed', (e) => {
+        if (e.detail === 'groups') {
+          this.loadGroups();
+          this.loadAvailableModels();
+        }
+      });
     },
 
     async loadAvailableModels() {
@@ -513,6 +529,11 @@ function usersComponent() {
 
     async init() {
       await this.loadUsers();
+      window.addEventListener('page-changed', (e) => {
+        if (e.detail === 'users') {
+          this.loadUsers();
+        }
+      });
     },
 
     async loadUsers() {
