@@ -193,7 +193,6 @@ function accountsComponent() {
     },
 
     async init() {
-      await this.refreshAccounts();
       window.addEventListener('page-changed', (e) => {
         if (e.detail === 'accounts') {
           this.refreshAccounts();
@@ -388,10 +387,6 @@ function groupsComponent() {
     },
 
     async init() {
-      await Promise.all([
-        this.loadGroups(),
-        this.loadAvailableModels()
-      ]);
       window.addEventListener('page-changed', (e) => {
         if (e.detail === 'groups') {
           this.loadGroups();
@@ -528,7 +523,6 @@ function usersComponent() {
     createError: '',
 
     async init() {
-      await this.loadUsers();
       window.addEventListener('page-changed', (e) => {
         if (e.detail === 'users') {
           this.loadUsers();
