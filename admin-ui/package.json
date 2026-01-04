@@ -1,0 +1,15 @@
+{
+  "name": "antigravity-proxy-admin-ui",
+  "version": "1.0.0",
+  "description": "Admin UI for Antigravity Claude Proxy",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "vite"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

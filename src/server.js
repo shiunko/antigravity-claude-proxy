@@ -16,6 +16,13 @@ import { OpenAIInput } from './adapters/input/openai-input.js';
 import { authenticateUser } from './middleware/auth.js';
 import { formatDuration } from './utils/helpers.js';
 
+// Admin routes
+import adminAuthRouter from './routes/admin-auth.js';
+import adminAccountsRouter from './routes/admin-accounts.js';
+import adminUsersRouter from './routes/admin-users.js';
+import adminGroupsRouter from './routes/admin-groups.js';
+import adminStatsRouter from './routes/admin-stats.js';
+
 const app = express();
 
 // 1. Initialize Services
@@ -80,6 +87,13 @@ app.use((req, res, next) => {
     }
     next();
 });
+
+// 4. Admin Routes (before authentication middleware, they handle their own auth)
+app.use('/admin/auth', adminAuthRouter);
+app.use('/admin/accounts', adminAccountsRouter);
+app.use('/admin/users', adminUsersRouter);
+app.use('/admin/groups', adminGroupsRouter);
+app.use('/admin/stats', adminStatsRouter);
 
 // Apply authentication middleware to all routes (except health which checks internally if needed, but here we apply globally)
 // Note: authenticateUser skips /health and /

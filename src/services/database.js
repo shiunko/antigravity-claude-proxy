@@ -38,9 +38,23 @@ function initDb(db) {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             api_key TEXT UNIQUE NOT NULL,
+            password_hash TEXT,
+            is_admin INTEGER DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     `);
+
+  // Add password_hash and is_admin columns if they don't exist (migration)
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN password_hash TEXT`);
+  } catch (e) {
+    // Column already exists
+  }
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0`);
+  } catch (e) {
+    // Column already exists
+  }
 
   // Upstream Accounts table
   db.exec(`
@@ -90,12 +104,12 @@ function initDb(db) {
 
 // --- User Operations ---
 
-export function createUser(username, apiKey) {
+export function createUser(username, apiKey, passwordHash = null, isAdmin = false) {
   const db = getDb();
   const stmt = db.prepare(
-    "INSERT INTO users (username, api_key) VALUES (?, ?)",
+    "INSERT INTO users (username, api_key, password_hash, is_admin) VALUES (?, ?, ?, ?)",
   );
-  return stmt.run(username, apiKey);
+  return stmt.run(username, apiKey, passwordHash, isAdmin ? 1 : 0);
 }
 
 export function getUserByApiKey(apiKey) {
@@ -112,13 +126,44 @@ export function getUserByName(username) {
 
 export function listUsers() {
   const db = getDb();
-  return db.prepare("SELECT id, username, created_at FROM users").all();
+  return db
+    .prepare("SELECT id, username, api_key, is_admin, created_at FROM users")
+    .all()
+    .map((user) => ({ ...user, is_admin: !!user.is_admin }));
 }
 
 export function deleteUser(username) {
   const db = getDb();
   const stmt = db.prepare("DELETE FROM users WHERE username = ?");
   return stmt.run(username);
+}
+
+export function deleteUserById(userId) {
+  const db = getDb();
+  const stmt = db.prepare("DELETE FROM users WHERE id = ?");
+  return stmt.run(userId);
+}
+
+export function getUserById(userId) {
+  const db = getDb();
+  const stmt = db.prepare("SELECT * FROM users WHERE id = ?");
+  const user = stmt.get(userId);
+  if (user) {
+    user.is_admin = !!user.is_admin;
+  }
+  return user;
+}
+
+export function updateUser(userId, updates) {
+  const db = getDb();
+  const keys = Object.keys(updates);
+  if (keys.length === 0) return;
+
+  const setClause = keys.map((k) => `${k} = ?`).join(", ");
+  const values = [...Object.values(updates), userId];
+
+  const stmt = db.prepare(`UPDATE users SET ${setClause} WHERE id = ?`);
+  return stmt.run(...values);
 }
 
 // --- Account Operations ---
@@ -190,6 +235,23 @@ export function deleteAccount(userId, email) {
     "DELETE FROM upstream_accounts WHERE user_id = ? AND email = ?",
   );
   return stmt.run(userId, email);
+}
+
+export function deleteAccountById(accountId) {
+  const db = getDb();
+  const stmt = db.prepare("DELETE FROM upstream_accounts WHERE id = ?");
+  return stmt.run(accountId);
+}
+
+export function getAccountById(accountId) {
+  const db = getDb();
+  const stmt = db.prepare("SELECT * FROM upstream_accounts WHERE id = ?");
+  const account = stmt.get(accountId);
+  if (account) {
+    account.is_rate_limited = !!account.is_rate_limited;
+    account.is_invalid = !!account.is_invalid;
+  }
+  return account;
 }
 
 // Reset rate limits that have expired
@@ -264,6 +326,12 @@ export function deleteModelGroup(userId, alias) {
     "DELETE FROM model_groups WHERE user_id = ? AND alias = ?",
   );
   return stmt.run(userId, alias);
+}
+
+export function deleteModelGroupById(groupId) {
+  const db = getDb();
+  const stmt = db.prepare("DELETE FROM model_groups WHERE id = ?");
+  return stmt.run(groupId);
 }
 
 export function removeModelFromGroup(groupId, modelName) {

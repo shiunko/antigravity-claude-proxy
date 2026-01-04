@@ -14,6 +14,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
+    "admin": "cd admin-ui && npm start",
+    "admin:install": "cd admin-ui && npm install",
     "accounts": "node src/accounts-cli.js",
     "accounts:add": "node src/accounts-cli.js add",
     "accounts:list": "node src/accounts-cli.js list",
