@@ -1,0 +1,25 @@
+[tools]
+"github:caddyserver/caddy" = "latest"
+node = "24"
+
+[tasks.init-frontend]
+description = "Install frontend dependencies"
+run = "cd admin-ui && npm i"
+
+[tasks.init]
+description = "Install all dependencies"
+alias = "i"
+depends = ["init-frontend"]
+run = "npm i"
+
+[tasks.api]
+description = "Start the backend API server"
+run = "npm start"
+
+[tasks.ui]
+description = "Start the frontend development server"
+run = "cd admin-ui && npm start"
+
+[tasks.build]
+description = "Build the frontend application"
+run = "cd admin-ui && npm run build"

@@ -1,0 +1,63 @@
+:80 {
+	root * admin-ui/dist
+	encode
+	file_server
+
+	handle /admin/* {
+		reverse_proxy http://127.0.0.1:8080 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			# 针对 SSE 和流式响应的优化配置
+			flush_interval -1
+			# 保持长连接以支持 SSE
+			header_up Connection "keep-alive"
+			header_up Cache-Control "no-cache"
+		}
+	}
+
+	handle_path /js/* {
+		root * admin-ui/js
+		encode
+		file_server
+	}
+
+	handle /v1/* {
+		reverse_proxy http://127.0.0.1:8080 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			# 针对 SSE 和流式响应的优化配置
+			flush_interval -1
+			# 保持长连接以支持 SSE
+			header_up Connection "keep-alive"
+			header_up Cache-Control "no-cache"
+		}
+	}
+
+	handle /account-limits/* {
+		reverse_proxy http://127.0.0.1:8080 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			# 针对 SSE 和流式响应的优化配置
+			flush_interval -1
+			# 保持长连接以支持 SSE
+			header_up Connection "keep-alive"
+			header_up Cache-Control "no-cache"
+		}
+	}
+
+	handle /health {
+		reverse_proxy http://127.0.0.1:8080 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			# 针对 SSE 和流式响应的优化配置
+			flush_interval -1
+			# 保持长连接以支持 SSE
+			header_up Connection "keep-alive"
+			header_up Cache-Control "no-cache"
+		}
+	}
+}
