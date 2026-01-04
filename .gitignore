@@ -28,3 +28,6 @@ tests/utils/*.jpeg
 # Build output
 dist/
 build/
+
+# Database
+data/
