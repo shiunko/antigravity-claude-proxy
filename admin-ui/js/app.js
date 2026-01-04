@@ -368,6 +368,8 @@ function groupsComponent() {
     },
     createError: '',
 
+    availableModels: [], // Store available models
+
     addModelModal: {
       show: false,
       group: null,
@@ -376,7 +378,49 @@ function groupsComponent() {
     },
 
     async init() {
-      await this.loadGroups();
+      await Promise.all([
+        this.loadGroups(),
+        this.loadAvailableModels()
+      ]);
+    },
+
+    async loadAvailableModels() {
+      try {
+        const limitsData = await window.api.getAccountLimits();
+
+        // Extract unique models from limits data
+        const models = new Set();
+        if (limitsData && limitsData.accounts) {
+          limitsData.accounts.forEach(acc => {
+            if (acc.limits) {
+              Object.keys(acc.limits).forEach(model => models.add(model));
+            }
+          });
+        }
+
+        // Convert to array and sort
+        this.availableModels = Array.from(models).sort();
+
+        // Add common models if list is empty (fallback)
+        if (this.availableModels.length === 0) {
+          this.availableModels = [
+            'gemini-2.0-flash-exp',
+            'gemini-1.5-pro',
+            'gemini-1.5-flash',
+            'claude-3-opus-20240229',
+            'claude-3-sonnet-20240229',
+            'claude-3-haiku-20240307'
+          ];
+        }
+      } catch (error) {
+        console.error('Failed to load available models:', error);
+        // Fallback models
+        this.availableModels = [
+          'gemini-2.0-flash-exp',
+          'gemini-1.5-pro',
+          'gemini-1.5-flash'
+        ];
+      }
     },
 
     async loadGroups() {
