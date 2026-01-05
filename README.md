@@ -51,7 +51,7 @@ antigravity-claude-proxy start
 ### Option 2: Clone Repository
 
 ```bash
-git clone https://github.com/badri-s2001/antigravity-claude-proxy.git
+git clone https://github.com/shiunko/antigravity-claude-proxy.git
 cd antigravity-claude-proxy
 npm install
 npm start

@@ -51,7 +51,7 @@ antigravity-claude-proxy start
 ### 选项 2: 克隆仓库
 
 ```bash
-git clone https://github.com/badri-s2001/antigravity-claude-proxy.git
+git clone https://github.com/shiunko/antigravity-claude-proxy.git
 cd antigravity-claude-proxy
 npm install
 npm start
