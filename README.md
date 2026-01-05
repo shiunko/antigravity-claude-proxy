@@ -8,6 +8,9 @@ A proxy server that exposes an **Anthropic-compatible API** backed by **Antigrav
 
 ![Antigravity Claude Proxy Banner](images/banner.png)
 
+**Sample Page**: https://acp.remote-cat.net/
+
+
 ## Acknowledgements
 
 This project is a fork of [antigravity-claude-proxy](https://github.com/badrisnarayanan/antigravity-claude-proxy). Huge thanks to the original author for their work!

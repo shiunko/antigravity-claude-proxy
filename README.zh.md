@@ -12,6 +12,9 @@
 
 ![Antigravity Claude Proxy Banner](images/banner.png)
 
+**示例页面**: https://acp.remote-cat.net/
+
+
 ## 工作原理
 
 ```
