@@ -2,11 +2,11 @@
 
 [English](./README.md)
 
-[![npm version](https://img.shields.io/npm/v/antigravity-claude-proxy.svg)](https://www.npmjs.com/package/antigravity-claude-proxy)
-[![npm downloads](https://img.shields.io/npm/dm/antigravity-claude-proxy.svg)](https://www.npmjs.com/package/antigravity-claude-proxy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-<a href="https://buymeacoffee.com/badrinarayanans" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
+## 特别鸣谢
+
+本项目是 [antigravity-claude-proxy](https://github.com/badrisnarayanan/antigravity-claude-proxy) 的 Fork 版本。非常感谢原作者的工作！
 
 这是一个代理服务器，它通过 **Antigravity's Cloud Code** 后端暴露 **Anthropic 兼容 API**，让你可以通过 **Claude Code CLI** 使用 Claude 和 Gemini 模型。
 
@@ -509,9 +509,3 @@ antigravity-claude-proxy accounts
 ## 许可证
 
 MIT
-
----
-
-## 星标历史
-
-[![Star History Chart](https://api.star-history.com/svg?repos=badri-s2001/antigravity-claude-proxy&type=date&legend=top-left&cache-control=no-cache)](https://www.star-history.com/#badri-s2001/antigravity-claude-proxy&type=date&legend=top-left)
