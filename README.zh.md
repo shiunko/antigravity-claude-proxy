@@ -30,31 +30,25 @@
 
 ## 先决条件
 
-- **Node.js** 18 或更高版本
+- **mise** (https://mise.jdx.dev)
 - 用于认证的 **Google 账号**
 
 ---
 
 ## 安装
 
-### 选项 1: npm (推荐)
-
-```bash
-# 使用 npx 直接运行 (无需安装)
-npx antigravity-claude-proxy start
-
-# 或者全局安装
-npm install -g antigravity-claude-proxy
-antigravity-claude-proxy start
-```
-
-### 选项 2: 克隆仓库
-
 ```bash
 git clone https://github.com/shiunko/antigravity-claude-proxy.git
 cd antigravity-claude-proxy
-npm install
-npm start
+
+# 安装工具 (Node.js)
+mise install
+
+# 信任项目以允许环境配置加载
+mise trust
+
+# 安装依赖 (运行 npm install)
+mise run init
 ```
 
 ---
@@ -66,13 +60,6 @@ npm start
 添加一个或多个 Google 账号以进行负载均衡：
 
 ```bash
-# 如果通过 npm 安装
-antigravity-claude-proxy accounts add
-
-# 如果使用 npx
-npx antigravity-claude-proxy accounts add
-
-# 如果本地克隆
 npm run accounts:add
 ```
 
@@ -82,26 +69,19 @@ npm run accounts:add
 
 ```bash
 # 列出所有账号
-antigravity-claude-proxy accounts list
+npm run accounts:list
 
 # 验证账号是否工作
-antigravity-claude-proxy accounts verify
+npm run accounts:verify
 
 # 交互式账号管理
-antigravity-claude-proxy accounts
+npm run accounts
 ```
 
 ### 2. 启动代理服务器
 
 ```bash
-# 如果通过 npm 安装
-antigravity-claude-proxy start
-
-# 如果使用 npx
-npx antigravity-claude-proxy start
-
-# 如果本地克隆
-npm start
+mise run api
 ```
 
 服务器默认运行在 `http://localhost:8080`。
@@ -109,11 +89,7 @@ npm start
 要在不同端口（例如 3000）上运行：
 
 ```bash
-# 使用环境变量
-PORT=3000 antigravity-claude-proxy start
-
-# 或者使用 npm
-PORT=3000 npm start
+PORT=3000 mise run api
 ```
 
 ### 3. 启动 Web 管理面板（可选但推荐）
@@ -121,11 +97,8 @@ PORT=3000 npm start
 本项目现在包含一个功能齐全的 Web 管理面板，用于管理账号、用户和模型组。
 
 ```bash
-# 安装管理面板依赖（仅首次需要）
-npm run admin:install
-
 # 启动管理面板
-npm run admin
+mise run ui
 ```
 
 管理面板默认运行在 `http://localhost:3000`。
@@ -408,7 +381,7 @@ curl "http://localhost:8080/account-limits?format=table"
 
 ```bash
 # 在一个终端启动服务器
-npm start
+mise run api
 
 # 在另一个终端运行测试
 npm test
@@ -437,19 +410,11 @@ curl -X POST http://localhost:8080/refresh-token
 ```
 
 或者重新认证账号：
-```bash
-antigravity-claude-proxy accounts
-```
-
-### 速率限制 (429 Rate Limiting)
-
-如果有多个账号，代理会自动切换到下一个可用账号。如果是单账号，你需要等待速率限制重置。
-
 ### 账号显示 "Invalid" (无效)
 
 重新认证账号：
 ```bash
-antigravity-claude-proxy accounts
+npm run accounts
 # 选择 "Re-authenticate" 来重新认证无效账号
 ```
 

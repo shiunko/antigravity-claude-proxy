@@ -30,31 +30,25 @@ This project is a fork of [antigravity-claude-proxy](https://github.com/badrisna
 
 ## Prerequisites
 
-- **Node.js** 18 or later
+- **mise** (https://mise.jdx.dev)
 - **Google account(s)** for authentication
 
 ---
 
 ## Installation
 
-### Option 1: npm (Recommended)
-
-```bash
-# Run directly with npx (no install needed)
-npx antigravity-claude-proxy start
-
-# Or install globally
-npm install -g antigravity-claude-proxy
-antigravity-claude-proxy start
-```
-
-### Option 2: Clone Repository
-
 ```bash
 git clone https://github.com/shiunko/antigravity-claude-proxy.git
 cd antigravity-claude-proxy
-npm install
-npm start
+
+# Install tools (Node.js)
+mise install
+
+# Trust the project to allow environment configuration
+mise trust
+
+# Install dependencies (runs npm install)
+mise run init
 ```
 
 ---
@@ -66,13 +60,6 @@ npm start
 Add one or more Google accounts for load balancing:
 
 ```bash
-# If installed via npm
-antigravity-claude-proxy accounts add
-
-# If using npx
-npx antigravity-claude-proxy accounts add
-
-# If cloned locally
 npm run accounts:add
 ```
 
@@ -82,26 +69,19 @@ Manage accounts:
 
 ```bash
 # List all accounts
-antigravity-claude-proxy accounts list
+npm run accounts:list
 
 # Verify accounts are working
-antigravity-claude-proxy accounts verify
+npm run accounts:verify
 
 # Interactive account management
-antigravity-claude-proxy accounts
+npm run accounts
 ```
 
 ### 2. Start the Proxy Server
 
 ```bash
-# If installed via npm
-antigravity-claude-proxy start
-
-# If using npx
-npx antigravity-claude-proxy start
-
-# If cloned locally
-npm start
+mise run api
 ```
 
 The server runs on `http://localhost:8080` by default.
@@ -109,11 +89,7 @@ The server runs on `http://localhost:8080` by default.
 To run on a different port (e.g., 3000):
 
 ```bash
-# Using env var
-PORT=3000 antigravity-claude-proxy start
-
-# Or with npm
-PORT=3000 npm start
+PORT=3000 mise run api
 ```
 
 ### 3. Start the Web Admin Dashboard (Optional but Recommended)
@@ -121,11 +97,8 @@ PORT=3000 npm start
 The project now includes a full-featured web dashboard for managing accounts, users, and model groups.
 
 ```bash
-# Install admin dependencies (first time only)
-npm run admin:install
-
 # Start the admin UI
-npm run admin
+mise run ui
 ```
 
 The admin dashboard runs on `http://localhost:3000` by default.
@@ -408,7 +381,7 @@ Run the test suite (requires server running):
 
 ```bash
 # Start server in one terminal
-npm start
+mise run api
 
 # Run tests in another terminal
 npm test
@@ -437,19 +410,11 @@ curl -X POST http://localhost:8080/refresh-token
 ```
 
 Or re-authenticate the account:
-```bash
-antigravity-claude-proxy accounts
-```
-
-### Rate Limiting (429)
-
-With multiple accounts, the proxy automatically switches to the next available account. With a single account, you'll need to wait for the rate limit to reset.
-
 ### Account Shows as "Invalid"
 
 Re-authenticate the account:
 ```bash
-antigravity-claude-proxy accounts
+npm run accounts
 # Choose "Re-authenticate" for the invalid account
 ```
 
