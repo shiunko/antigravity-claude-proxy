@@ -509,3 +509,7 @@ This project is based on insights and code from:
 ## License
 
 MIT
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=shiunko/antigravity-claude-proxy&type=date&legend=top-left)](https://www.star-history.com/#shiunko/antigravity-claude-proxy&type=date&legend=top-left)

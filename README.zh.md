@@ -509,3 +509,7 @@ antigravity-claude-proxy accounts
 ## 许可证
 
 MIT
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=shiunko/antigravity-claude-proxy&type=date&legend=top-left)](https://www.star-history.com/#shiunko/antigravity-claude-proxy&type=date&legend=top-left)
