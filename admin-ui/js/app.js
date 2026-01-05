@@ -2,8 +2,8 @@
  * Main Application for Antigravity Proxy Admin
  */
 
-document.addEventListener('alpine:init', () => {
-  Alpine.store('shared', {
+document.addEventListener("alpine:init", () => {
+  Alpine.store("shared", {
     accounts: [],
     accountLimits: {},
     modelGroups: [],
@@ -13,7 +13,7 @@ document.addEventListener('alpine:init', () => {
       accounts: 0,
       limits: 0,
       modelGroups: 0,
-      users: 0
+      users: 0,
     },
 
     // Cache duration in milliseconds (e.g., 5 seconds)
@@ -22,7 +22,11 @@ document.addEventListener('alpine:init', () => {
 
     async loadAccounts(force = false) {
       const now = Date.now();
-      if (!force && this.accounts.length > 0 && (now - this.lastFetch.accounts < this.CACHE_DURATION)) {
+      if (
+        !force &&
+        this.accounts.length > 0 &&
+        now - this.lastFetch.accounts < this.CACHE_DURATION
+      ) {
         return this.accounts;
       }
 
@@ -34,7 +38,11 @@ document.addEventListener('alpine:init', () => {
 
     async loadAccountLimits(force = false) {
       const now = Date.now();
-      if (!force && Object.keys(this.accountLimits).length > 0 && (now - this.lastFetch.limits < this.CACHE_DURATION)) {
+      if (
+        !force &&
+        Object.keys(this.accountLimits).length > 0 &&
+        now - this.lastFetch.limits < this.CACHE_DURATION
+      ) {
         return this.accountLimits;
       }
 
@@ -42,7 +50,7 @@ document.addEventListener('alpine:init', () => {
         const limitsData = await window.api.getAccountLimits();
         const limitsMap = {};
         if (limitsData && limitsData.accounts) {
-          limitsData.accounts.forEach(acc => {
+          limitsData.accounts.forEach((acc) => {
             limitsMap[acc.email] = acc;
           });
         }
@@ -50,14 +58,18 @@ document.addEventListener('alpine:init', () => {
         this.lastFetch.limits = now;
         return this.accountLimits;
       } catch (error) {
-        console.error('Failed to load limits:', error);
+        console.error("Failed to load limits:", error);
         return {}; // Return empty object on error to avoid breaking UI
       }
     },
 
     async loadModelGroups(force = false) {
       const now = Date.now();
-      if (!force && this.modelGroups.length > 0 && (now - this.lastFetch.modelGroups < this.CACHE_DURATION)) {
+      if (
+        !force &&
+        this.modelGroups.length > 0 &&
+        now - this.lastFetch.modelGroups < this.CACHE_DURATION
+      ) {
         return this.modelGroups;
       }
 
@@ -69,7 +81,11 @@ document.addEventListener('alpine:init', () => {
 
     async loadUsers(force = false) {
       const now = Date.now();
-      if (!force && this.users.length > 0 && (now - this.lastFetch.users < this.CACHE_DURATION)) {
+      if (
+        !force &&
+        this.users.length > 0 &&
+        now - this.lastFetch.users < this.CACHE_DURATION
+      ) {
         return this.users;
       }
 
@@ -77,7 +93,7 @@ document.addEventListener('alpine:init', () => {
       this.users = users;
       this.lastFetch.users = now;
       return users;
-    }
+    },
   });
 });
 
@@ -87,27 +103,27 @@ function app() {
     // Auth state
     isAuthenticated: false,
     currentUser: null,
-    authTab: 'login',
+    authTab: "login",
 
     // Login form
     loginForm: {
-      username: '',
-      password: '',
+      username: "",
+      password: "",
     },
-    loginError: '',
+    loginError: "",
 
     // Register form
     registerForm: {
-      username: '',
-      password: '',
-      confirmPassword: '',
+      username: "",
+      password: "",
+      confirmPassword: "",
     },
-    registerError: '',
-    registerSuccess: '',
+    registerError: "",
+    registerSuccess: "",
 
     // UI state
     isLoading: false,
-    currentPage: 'dashboard',
+    currentPage: "dashboard",
 
     // Initialize
     async init() {
@@ -124,27 +140,27 @@ function app() {
       }
 
       // Listen for navigation events
-      this.$watch('currentPage', (page) => {
+      this.$watch("currentPage", (page) => {
         // Refresh data when navigating
-        this.$dispatch('page-changed', page);
+        this.$dispatch("page-changed", page);
       });
     },
 
     // Login
     async login() {
-      this.loginError = '';
+      this.loginError = "";
       this.isLoading = true;
 
       try {
         const result = await window.api.login(
           this.loginForm.username,
-          this.loginForm.password
+          this.loginForm.password,
         );
         this.currentUser = result.user;
         this.isAuthenticated = true;
-        this.loginForm = { username: '', password: '' };
+        this.loginForm = { username: "", password: "" };
       } catch (error) {
-        this.loginError = error.message || '登录失败';
+        this.loginError = error.message || "登录失败";
       } finally {
         this.isLoading = false;
       }
@@ -152,16 +168,16 @@ function app() {
 
     // Register
     async register() {
-      this.registerError = '';
-      this.registerSuccess = '';
+      this.registerError = "";
+      this.registerSuccess = "";
 
       if (this.registerForm.password !== this.registerForm.confirmPassword) {
-        this.registerError = '两次输入的密码不一致';
+        this.registerError = "两次输入的密码不一致";
         return;
       }
 
       if (this.registerForm.password.length < 6) {
-        this.registerError = '密码长度至少 6 位';
+        this.registerError = "密码长度至少 6 位";
         return;
       }
 
@@ -170,17 +186,17 @@ function app() {
       try {
         await window.api.register(
           this.registerForm.username,
-          this.registerForm.password
+          this.registerForm.password,
         );
-        this.registerSuccess = '注册成功！请登录';
-        this.registerForm = { username: '', password: '', confirmPassword: '' };
+        this.registerSuccess = "注册成功！请登录";
+        this.registerForm = { username: "", password: "", confirmPassword: "" };
         // Switch to login tab
         setTimeout(() => {
-          this.authTab = 'login';
-          this.registerSuccess = '';
+          this.authTab = "login";
+          this.registerSuccess = "";
         }, 2000);
       } catch (error) {
-        this.registerError = error.message || '注册失败';
+        this.registerError = error.message || "注册失败";
       } finally {
         this.isLoading = false;
       }
@@ -191,7 +207,7 @@ function app() {
       window.api.logout();
       this.isAuthenticated = false;
       this.currentUser = null;
-      this.currentPage = 'dashboard';
+      this.currentPage = "dashboard";
     },
   };
 }
@@ -210,8 +226,8 @@ function dashboardComponent() {
 
     async init() {
       await this.loadData();
-      window.addEventListener('page-changed', (e) => {
-        if (e.detail === 'dashboard') {
+      window.addEventListener("page-changed", (e) => {
+        if (e.detail === "dashboard") {
           this.loadData();
         }
       });
@@ -220,34 +236,46 @@ function dashboardComponent() {
     async loadData() {
       try {
         // Load accounts for stats using shared store
-        const shared = Alpine.store('shared');
+        const shared = Alpine.store("shared");
         const accounts = await shared.loadAccounts();
 
         this.stats.totalAccounts = accounts.length;
-        this.stats.activeAccounts = accounts.filter(a => !a.is_invalid && !a.is_rate_limited).length;
-        this.stats.rateLimitedAccounts = accounts.filter(a => a.is_rate_limited).length;
-        this.stats.invalidAccounts = accounts.filter(a => a.is_invalid).length;
+        this.stats.activeAccounts = accounts.filter(
+          (a) => !a.is_invalid && !a.is_rate_limited,
+        ).length;
+        this.stats.rateLimitedAccounts = accounts.filter(
+          (a) => a.is_rate_limited,
+        ).length;
+        this.stats.invalidAccounts = accounts.filter(
+          (a) => a.is_invalid,
+        ).length;
 
         // Load model groups using shared store
         this.modelGroups = await shared.loadModelGroups();
       } catch (error) {
-        console.error('Failed to load dashboard data:', error);
+        console.error("Failed to load dashboard data:", error);
       }
     },
 
     copyApiKey() {
-      const apiKey = Alpine.store('app')?.currentUser?.api_key || this.$data.currentUser?.api_key;
+      const apiKey =
+        Alpine.store("app")?.currentUser?.api_key ||
+        this.$data.currentUser?.api_key;
       if (apiKey) {
         navigator.clipboard.writeText(apiKey);
-        this.showToast('API Key 已复制到剪贴板', 'success');
+        this.showToast("API Key 已复制到剪贴板", "success");
       }
     },
 
-    showToast(message, type = 'info') {
+    showToast(message, type = "info") {
       // Simple toast implementation
-      const toast = document.createElement('div');
+      const toast = document.createElement("div");
       toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 ${
-        type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+        type === "success"
+          ? "bg-green-500"
+          : type === "error"
+            ? "bg-red-500"
+            : "bg-blue-500"
       } text-white`;
       toast.textContent = message;
       document.body.appendChild(toast);
@@ -262,20 +290,20 @@ function accountsComponent() {
     accounts: [],
     accountLimits: {},
     showAddModal: false,
-    addMethod: 'oauth',
+    addMethod: "oauth",
     oauthLoading: false,
     isLoading: false,
-    addError: '',
+    addError: "",
 
     manualForm: {
-      email: '',
-      refresh_token: '',
-      project_id: '',
+      email: "",
+      refresh_token: "",
+      project_id: "",
     },
 
     async init() {
-      window.addEventListener('page-changed', (e) => {
-        if (e.detail === 'accounts') {
+      window.addEventListener("page-changed", (e) => {
+        if (e.detail === "accounts") {
           this.refreshAccounts();
         }
       });
@@ -283,16 +311,16 @@ function accountsComponent() {
 
     async refreshAccounts(force = false) {
       try {
-        const shared = Alpine.store('shared');
+        const shared = Alpine.store("shared");
         const [accounts, accountLimits] = await Promise.all([
           shared.loadAccounts(force),
-          shared.loadAccountLimits(force)
+          shared.loadAccountLimits(force),
         ]);
 
         this.accounts = accounts;
         this.accountLimits = accountLimits;
       } catch (error) {
-        console.error('Failed to load accounts:', error);
+        console.error("Failed to load accounts:", error);
       }
     },
 
@@ -302,30 +330,34 @@ function accountsComponent() {
 
       return Object.entries(accountLimit.limits).map(([model, limit]) => {
         if (!limit) {
-          return { model, remaining: 'N/A', remainingFraction: null };
+          return { model, remaining: "N/A", remainingFraction: null };
         }
         return {
           model,
-          ...limit
+          ...limit,
         };
       });
     },
 
     async startOAuth() {
       this.oauthLoading = true;
-      this.addError = '';
+      this.addError = "";
 
       try {
         const result = await window.api.startOAuth();
         if (result.authUrl) {
           // Open OAuth URL in new window
-          const authWindow = window.open(result.authUrl, 'oauth', 'width=600,height=700');
+          const authWindow = window.open(
+            result.authUrl,
+            "oauth",
+            "width=600,height=700",
+          );
           const state = result.state;
 
           // Poll for completion
           const pollInterval = setInterval(async () => {
             try {
-              let status = 'pending';
+              let status = "pending";
               let error = null;
 
               if (state) {
@@ -335,29 +367,29 @@ function accountsComponent() {
                   error = statusResult.error;
                 } catch (e) {
                   // Session might be expired or invalid
-                  status = 'unknown';
+                  status = "unknown";
                 }
               }
 
-              if (status === 'completed') {
+              if (status === "completed") {
                 clearInterval(pollInterval);
                 this.oauthLoading = false;
                 if (authWindow && !authWindow.closed) authWindow.close();
                 await this.refreshAccounts(true);
                 this.showAddModal = false;
-                this.showToast('账户添加成功', 'success');
-              } else if (status === 'error') {
+                this.showToast("账户添加成功", "success");
+              } else if (status === "error") {
                 clearInterval(pollInterval);
                 this.oauthLoading = false;
                 if (authWindow && !authWindow.closed) authWindow.close();
-                this.addError = error || 'OAuth 授权失败';
-              } else if (authWindow.closed && status !== 'processing') {
+                this.addError = error || "OAuth 授权失败";
+              } else if (authWindow.closed && status !== "processing") {
                 // User closed window manually and backend is not processing
                 clearInterval(pollInterval);
                 this.oauthLoading = false;
               }
             } catch (e) {
-              console.error('OAuth poll error:', e);
+              console.error("OAuth poll error:", e);
             }
           }, 1000);
 
@@ -368,26 +400,26 @@ function accountsComponent() {
           }, 300000);
         }
       } catch (error) {
-        this.addError = error.message || 'OAuth 启动失败';
+        this.addError = error.message || "OAuth 启动失败";
         this.oauthLoading = false;
       }
     },
 
     async addManualAccount() {
       this.isLoading = true;
-      this.addError = '';
+      this.addError = "";
 
       try {
         await window.api.addAccountManual(
           this.manualForm.email,
           this.manualForm.refresh_token,
-          this.manualForm.project_id
+          this.manualForm.project_id,
         );
         this.showAddModal = false;
-        this.manualForm = { email: '', refresh_token: '', project_id: '' };
+        this.manualForm = { email: "", refresh_token: "", project_id: "" };
         await this.refreshAccounts(true);
       } catch (error) {
-        this.addError = error.message || '添加失败';
+        this.addError = error.message || "添加失败";
       } finally {
         this.isLoading = false;
       }
@@ -397,9 +429,9 @@ function accountsComponent() {
       try {
         await window.api.verifyAccount(account.id);
         await this.refreshAccounts(true);
-        this.showToast('账户验证成功', 'success');
+        this.showToast("账户验证成功", "success");
       } catch (error) {
-        this.showToast(error.message || '验证失败', 'error');
+        this.showToast(error.message || "验证失败", "error");
       }
     },
 
@@ -411,28 +443,32 @@ function accountsComponent() {
       try {
         await window.api.deleteAccount(account.id);
         await this.refreshAccounts(true);
-        this.showToast('账户已删除', 'success');
+        this.showToast("账户已删除", "success");
       } catch (error) {
-        this.showToast(error.message || '删除失败', 'error');
+        this.showToast(error.message || "删除失败", "error");
       }
     },
 
     formatTime(timestamp) {
-      if (!timestamp) return '-';
+      if (!timestamp) return "-";
       const date = new Date(timestamp);
       const now = new Date();
       const diff = now - date;
 
-      if (diff < 60000) return '刚刚';
+      if (diff < 60000) return "刚刚";
       if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
       if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
-      return date.toLocaleDateString('zh-CN');
+      return date.toLocaleDateString("zh-CN");
     },
 
-    showToast(message, type = 'info') {
-      const toast = document.createElement('div');
+    showToast(message, type = "info") {
+      const toast = document.createElement("div");
       toast.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 ${
-        type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+        type === "success"
+          ? "bg-green-500"
+          : type === "error"
+            ? "bg-red-500"
+            : "bg-blue-500"
       } text-white`;
       toast.textContent = message;
       document.body.appendChild(toast);
@@ -447,23 +483,23 @@ function groupsComponent() {
     groups: [],
     showCreateModal: false,
     createForm: {
-      alias: '',
-      strategy: 'priority',
+      alias: "",
+      strategy: "priority",
     },
-    createError: '',
+    createError: "",
 
     availableModels: [], // Store available models
 
     addModelModal: {
       show: false,
       group: null,
-      modelName: '',
+      modelName: "",
       orderIndex: 0,
     },
 
     async init() {
-      window.addEventListener('page-changed', (e) => {
-        if (e.detail === 'groups') {
+      window.addEventListener("page-changed", (e) => {
+        if (e.detail === "groups") {
           this.loadGroups();
           this.loadAvailableModels();
         }
@@ -472,15 +508,15 @@ function groupsComponent() {
 
     async loadAvailableModels() {
       try {
-        const shared = Alpine.store('shared');
+        const shared = Alpine.store("shared");
         const accountLimits = await shared.loadAccountLimits();
 
         // Extract unique models from limits data
         const models = new Set();
         if (accountLimits) {
-          Object.values(accountLimits).forEach(acc => {
+          Object.values(accountLimits).forEach((acc) => {
             if (acc.limits) {
-              Object.keys(acc.limits).forEach(model => models.add(model));
+              Object.keys(acc.limits).forEach((model) => models.add(model));
             }
           });
         }
@@ -491,47 +527,47 @@ function groupsComponent() {
         // Add common models if list is empty (fallback)
         if (this.availableModels.length === 0) {
           this.availableModels = [
-            'gemini-2.0-flash-exp',
-            'gemini-1.5-pro',
-            'gemini-1.5-flash',
-            'claude-3-opus-20240229',
-            'claude-3-sonnet-20240229',
-            'claude-3-haiku-20240307'
+            "gemini-2.0-flash-exp",
+            "gemini-1.5-pro",
+            "gemini-1.5-flash",
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229",
+            "claude-3-haiku-20240307",
           ];
         }
       } catch (error) {
-        console.error('Failed to load available models:', error);
+        console.error("Failed to load available models:", error);
         // Fallback models
         this.availableModels = [
-          'gemini-2.0-flash-exp',
-          'gemini-1.5-pro',
-          'gemini-1.5-flash'
+          "gemini-2.0-flash-exp",
+          "gemini-1.5-pro",
+          "gemini-1.5-flash",
         ];
       }
     },
 
     async loadGroups(force = false) {
       try {
-        const shared = Alpine.store('shared');
+        const shared = Alpine.store("shared");
         this.groups = await shared.loadModelGroups(force);
       } catch (error) {
-        console.error('Failed to load groups:', error);
+        console.error("Failed to load groups:", error);
       }
     },
 
     async createGroup() {
-      this.createError = '';
+      this.createError = "";
 
       try {
         await window.api.createModelGroup(
           this.createForm.alias,
-          this.createForm.strategy
+          this.createForm.strategy,
         );
         this.showCreateModal = false;
-        this.createForm = { alias: '', strategy: 'priority' };
+        this.createForm = { alias: "", strategy: "priority" };
         await this.loadGroups(true);
       } catch (error) {
-        this.createError = error.message || '创建失败';
+        this.createError = error.message || "创建失败";
       }
     },
 
@@ -544,7 +580,7 @@ function groupsComponent() {
         await window.api.deleteModelGroup(group.id);
         await this.loadGroups(true);
       } catch (error) {
-        console.error('Failed to delete group:', error);
+        console.error("Failed to delete group:", error);
       }
     },
 
@@ -557,7 +593,7 @@ function groupsComponent() {
       this.addModelModal = {
         show: true,
         group: group,
-        modelName: '',
+        modelName: "",
         orderIndex: group.items?.length || 0,
       };
     },
@@ -567,12 +603,12 @@ function groupsComponent() {
         await window.api.addModelToGroup(
           this.addModelModal.group.id,
           this.addModelModal.modelName,
-          this.addModelModal.orderIndex
+          this.addModelModal.orderIndex,
         );
         this.addModelModal.show = false;
         await this.loadGroups(true);
       } catch (error) {
-        console.error('Failed to add model:', error);
+        console.error("Failed to add model:", error);
       }
     },
 
@@ -581,7 +617,7 @@ function groupsComponent() {
         await window.api.removeModelFromGroup(group.id, modelName);
         await this.loadGroups(true);
       } catch (error) {
-        console.error('Failed to remove model:', error);
+        console.error("Failed to remove model:", error);
       }
     },
   };
@@ -593,15 +629,15 @@ function usersComponent() {
     users: [],
     showCreateModal: false,
     createForm: {
-      username: '',
-      password: '',
+      username: "",
+      password: "",
       is_admin: false,
     },
-    createError: '',
+    createError: "",
 
     async init() {
-      window.addEventListener('page-changed', (e) => {
-        if (e.detail === 'users') {
+      window.addEventListener("page-changed", (e) => {
+        if (e.detail === "users") {
           this.loadUsers();
         }
       });
@@ -609,27 +645,27 @@ function usersComponent() {
 
     async loadUsers(force = false) {
       try {
-        const shared = Alpine.store('shared');
+        const shared = Alpine.store("shared");
         this.users = await shared.loadUsers(force);
       } catch (error) {
-        console.error('Failed to load users:', error);
+        console.error("Failed to load users:", error);
       }
     },
 
     async createUser() {
-      this.createError = '';
+      this.createError = "";
 
       try {
         await window.api.createUser(
           this.createForm.username,
           this.createForm.password,
-          this.createForm.is_admin
+          this.createForm.is_admin,
         );
         this.showCreateModal = false;
-        this.createForm = { username: '', password: '', is_admin: false };
+        this.createForm = { username: "", password: "", is_admin: false };
         await this.loadUsers(true);
       } catch (error) {
-        this.createError = error.message || '创建失败';
+        this.createError = error.message || "创建失败";
       }
     },
 
@@ -642,7 +678,7 @@ function usersComponent() {
         await window.api.deleteUser(user.id);
         await this.loadUsers(true);
       } catch (error) {
-        console.error('Failed to delete user:', error);
+        console.error("Failed to delete user:", error);
       }
     },
 
@@ -655,13 +691,13 @@ function usersComponent() {
         await window.api.regenerateUserKey(user.id);
         await this.loadUsers(true);
       } catch (error) {
-        console.error('Failed to regenerate key:', error);
+        console.error("Failed to regenerate key:", error);
       }
     },
 
     formatDate(dateStr) {
-      if (!dateStr) return '-';
-      return new Date(dateStr).toLocaleDateString('zh-CN');
+      if (!dateStr) return "-";
+      return new Date(dateStr).toLocaleDateString("zh-CN");
     },
   };
 }
@@ -670,37 +706,41 @@ function usersComponent() {
 function settingsComponent() {
   return {
     passwordForm: {
-      currentPassword: '',
-      newPassword: '',
-      confirmPassword: '',
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
     },
-    passwordError: '',
-    passwordSuccess: '',
+    passwordError: "",
+    passwordSuccess: "",
     apiBaseUrl: window.api.baseUrl,
 
     async changePassword() {
-      this.passwordError = '';
-      this.passwordSuccess = '';
+      this.passwordError = "";
+      this.passwordSuccess = "";
 
       if (this.passwordForm.newPassword !== this.passwordForm.confirmPassword) {
-        this.passwordError = '两次输入的新密码不一致';
+        this.passwordError = "两次输入的新密码不一致";
         return;
       }
 
       if (this.passwordForm.newPassword.length < 6) {
-        this.passwordError = '新密码长度至少 6 位';
+        this.passwordError = "新密码长度至少 6 位";
         return;
       }
 
       try {
         await window.api.changePassword(
           this.passwordForm.currentPassword,
-          this.passwordForm.newPassword
+          this.passwordForm.newPassword,
         );
-        this.passwordSuccess = '密码修改成功';
-        this.passwordForm = { currentPassword: '', newPassword: '', confirmPassword: '' };
+        this.passwordSuccess = "密码修改成功";
+        this.passwordForm = {
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+        };
       } catch (error) {
-        this.passwordError = error.message || '修改失败';
+        this.passwordError = error.message || "修改失败";
       }
     },
   };

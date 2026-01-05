@@ -1,117 +1,124 @@
+@import "tailwindcss";
 /* Custom styles for Antigravity Proxy Admin UI */
 
 /* Sidebar positioning fix */
 aside {
-  position: fixed;
-  left: 0;
-  top: 0;
-  height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
 }
 
 main {
-  margin-left: 16rem; /* w-64 = 16rem */
+    margin-left: 16rem; /* w-64 = 16rem */
 }
 
 /* Loading spinner */
 .spinner {
-  border: 2px solid #f3f3f3;
-  border-top: 2px solid #3498db;
-  border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  animation: spin 1s linear infinite;
-  display: inline-block;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #3498db;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    animation: spin 1s linear infinite;
+    display: inline-block;
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Toast notifications */
 .toast-container {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
 }
 
 .toast {
-  padding: 1rem 1.5rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  animation: slideIn 0.3s ease-out;
+    padding: 1rem 1.5rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    animation: slideIn 0.3s ease-out;
 }
 
 .toast-success {
-  background-color: #10b981;
-  color: white;
+    background-color: #10b981;
+    color: white;
 }
 
 .toast-error {
-  background-color: #ef4444;
-  color: white;
+    background-color: #ef4444;
+    color: white;
 }
 
 .toast-info {
-  background-color: #3b82f6;
-  color: white;
+    background-color: #3b82f6;
+    color: white;
 }
 
 @keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }
 
 /* Modal backdrop blur */
 .modal-backdrop {
-  backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
 }
 
 /* Code block styling */
 code {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
 }
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  aside {
-    position: relative;
-    width: 100%;
-    height: auto;
-  }
+    aside {
+        position: relative;
+        width: 100%;
+        height: auto;
+    }
 
-  main {
-    margin-left: 0;
-  }
+    main {
+        margin-left: 0;
+    }
 }
 
 /* Button focus states */
 button:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
 }
 
 /* Input focus states */
-input:focus, textarea:focus, select:focus {
-  outline: none;
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
 }
 
 /* Table hover effect */
 tbody tr:hover {
-  background-color: #f9fafb;
+    background-color: #f9fafb;
 }
 
 /* Smooth page transitions */
 [x-cloak] {
-  display: none !important;
+    display: none !important;
 }
