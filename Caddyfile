@@ -60,4 +60,8 @@
 			header_up Cache-Control "no-cache"
 		}
 	}
+
+	handle /oauth-callback/* {
+	    reverse_proxy http://127.0.0.1:51121
+	}
 }
