@@ -78,7 +78,19 @@ export function convertCoreToOpenAI(result) {
         index: 0,
         message: {
           role: result.role,
-          content: result.content?.[0]?.text, // Helper to get text only, or handle blocks
+          content: (() => {
+            const thinking = result.content?.[0]?.thinking;
+            const text = result.content?.[0]?.text;
+
+            if (thinking && text) {
+              // 两者都有值：返回 thinkings...\n\ntext...
+              return `<think>\n${thinking}\n\n\n</think>\n\n\n${text}`;
+            }
+            if (thinking) {
+              return `<think>\n${thinking}\n\n\n</think>`;
+            }
+            return text;
+          })(),
         },
         finish_reason: mapStopReason(result.stopReason),
       },
