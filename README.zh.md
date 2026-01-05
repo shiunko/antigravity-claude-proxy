@@ -41,11 +41,11 @@
 git clone https://github.com/shiunko/antigravity-claude-proxy.git
 cd antigravity-claude-proxy
 
-# 安装工具 (Node.js)
-mise install
-
 # 信任项目以允许环境配置加载
 mise trust
+
+# 安装工具 (Node.js)
+mise install
 
 # 安装依赖 (运行 npm install)
 mise run init

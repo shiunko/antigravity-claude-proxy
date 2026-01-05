@@ -41,11 +41,11 @@ This project is a fork of [antigravity-claude-proxy](https://github.com/badrisna
 git clone https://github.com/shiunko/antigravity-claude-proxy.git
 cd antigravity-claude-proxy
 
-# Install tools (Node.js)
-mise install
-
 # Trust the project to allow environment configuration
 mise trust
+
+# Install tools (Node.js)
+mise install
 
 # Install dependencies (runs npm install)
 mise run init
